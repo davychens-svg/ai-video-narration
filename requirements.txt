@@ -1,0 +1,48 @@
+# Inerbee Video Narrator - Dependencies
+# Performance-optimized for real-time video processing
+# Supports SmolVLM (primary), MobileVLM (backup), Moondream 3.0 (feature-rich)
+
+# Core setuptools (Python 3.13 compatibility)
+setuptools>=75.0.0
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# WebRTC & Streaming
+aiortc>=1.6.0
+aiohttp>=3.9.0
+websockets>=12.0
+
+# Computer Vision
+opencv-python>=4.8.0
+numpy>=1.24.0,<2.0.0
+pillow>=11.0.0
+
+# AI/ML - Transformers & Vision Models
+# Note: For Python 3.13, use compatible versions
+torch>=2.1.0
+torchvision>=0.16.0
+transformers>=4.35.0
+accelerate>=0.25.0
+
+# Additional dependencies
+sentencepiece>=0.1.99
+protobuf>=4.25.0
+
+# Performance & Optimization
+einops>=0.7.0
+
+# Utilities
+python-dotenv>=1.0.0
+
+# Optional: Moondream 3.0 advanced features (requires NVIDIA GPU)
+# Uncomment if using Moondream with GPU:
+# flash-attn>=2.0.0  # Flash Attention 2 (NVIDIA only, may need manual build)
+# bitsandbytes>=0.41.3  # Quantization (NVIDIA only)
+
+# Note: For full Moondream 3.0 support:
+# - NVIDIA GPU with 24GB+ VRAM recommended
+# - CUDA 11.8+ installed
+# - Some packages may need manual installation
