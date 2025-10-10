@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect, type RefObject } from 'react';
 
 interface Detection {
   bbox: [number, number, number, number]; // [x1, y1, x2, y2]
@@ -13,7 +13,7 @@ interface Point {
 }
 
 interface VideoOverlayProps {
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement>;
   detections?: Detection[];
   points?: Point[];
   mode?: 'detection' | 'point' | 'none';
@@ -42,20 +42,32 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    const detectionColor = '#3B82F6'; // Blue color for detection boxes
+    const pointColor = '#3B82F6'; // Blue color for points
+
     if (mode === 'detection' && detections.length > 0) {
       // Draw bounding boxes
-      detections.forEach((detection, index) => {
-        const [x1, y1, x2, y2] = detection.bbox;
+      detections.forEach((detection) => {
+        if (!detection?.bbox || detection.bbox.length < 4) {
+          return;
+        }
+
+        const [rawX1, rawY1, rawX2, rawY2] = detection.bbox;
+        const x1 = Number(rawX1) || 0;
+        const y1 = Number(rawY1) || 0;
+        const x2 = Number(rawX2) || 0;
+        const y2 = Number(rawY2) || 0;
+
         const width = x2 - x1;
         const height = y2 - y1;
 
         // Draw box
-        ctx.strokeStyle = `hsl(${(index * 137.5) % 360}, 70%, 60%)`;
+        ctx.strokeStyle = detectionColor;
         ctx.lineWidth = 3;
         ctx.strokeRect(x1, y1, width, height);
 
         // Draw label background
-        ctx.fillStyle = `hsl(${(index * 137.5) % 360}, 70%, 60%)`;
+        ctx.fillStyle = detectionColor;
         const labelText = detection.confidence
           ? `${detection.label} ${(detection.confidence * 100).toFixed(0)}%`
           : detection.label;
@@ -71,12 +83,18 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
 
     if (mode === 'point' && points.length > 0) {
       // Draw points
-      points.forEach((point, index) => {
-        const color = `hsl(${(index * 137.5) % 360}, 70%, 60%)`;
+      points.forEach((point) => {
+        if (point == null) {
+          return;
+        }
+
+        const x = Number(point.x) || 0;
+        const y = Number(point.y) || 0;
+        const color = pointColor;
 
         // Draw point circle
         ctx.beginPath();
-        ctx.arc(point.x, point.y, 8, 0, 2 * Math.PI);
+        ctx.arc(x, y, 8, 0, 2 * Math.PI);
         ctx.fillStyle = color;
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
@@ -87,11 +105,11 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
         if (point.label) {
           ctx.fillStyle = color;
           const textMetrics = ctx.measureText(point.label);
-          ctx.fillRect(point.x + 12, point.y - 12, textMetrics.width + 10, 24);
+          ctx.fillRect(x + 12, y - 12, textMetrics.width + 10, 24);
 
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 12px Inter, sans-serif';
-          ctx.fillText(point.label, point.x + 17, point.y + 4);
+          ctx.fillText(point.label, x + 17, y + 4);
         }
       });
     }
@@ -102,18 +120,29 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
         updateCanvasSize();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        const detectionColor = '#3B82F6'; // Blue color for detection boxes
+        const pointColor = '#3B82F6'; // Blue color for points
+
         // Redraw everything
         if (mode === 'detection' && detections.length > 0) {
-          detections.forEach((detection, index) => {
-            const [x1, y1, x2, y2] = detection.bbox;
+          detections.forEach((detection) => {
+            if (!detection?.bbox || detection.bbox.length < 4) {
+              return;
+            }
+
+            const [rawX1, rawY1, rawX2, rawY2] = detection.bbox;
+            const x1 = Number(rawX1) || 0;
+            const y1 = Number(rawY1) || 0;
+            const x2 = Number(rawX2) || 0;
+            const y2 = Number(rawY2) || 0;
             const width = x2 - x1;
             const height = y2 - y1;
 
-            ctx.strokeStyle = `hsl(${(index * 137.5) % 360}, 70%, 60%)`;
+            ctx.strokeStyle = detectionColor;
             ctx.lineWidth = 3;
             ctx.strokeRect(x1, y1, width, height);
 
-            ctx.fillStyle = `hsl(${(index * 137.5) % 360}, 70%, 60%)`;
+            ctx.fillStyle = detectionColor;
             const labelText = detection.confidence
               ? `${detection.label} ${(detection.confidence * 100).toFixed(0)}%`
               : detection.label;
@@ -127,11 +156,17 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
         }
 
         if (mode === 'point' && points.length > 0) {
-          points.forEach((point, index) => {
-            const color = `hsl(${(index * 137.5) % 360}, 70%, 60%)`;
+          points.forEach((point) => {
+            if (point == null) {
+              return;
+            }
+
+            const x = Number(point.x) || 0;
+            const y = Number(point.y) || 0;
+            const color = pointColor;
 
             ctx.beginPath();
-            ctx.arc(point.x, point.y, 8, 0, 2 * Math.PI);
+            ctx.arc(x, y, 8, 0, 2 * Math.PI);
             ctx.fillStyle = color;
             ctx.fill();
             ctx.strokeStyle = '#ffffff';
@@ -141,11 +176,11 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
             if (point.label) {
               ctx.fillStyle = color;
               const textMetrics = ctx.measureText(point.label);
-              ctx.fillRect(point.x + 12, point.y - 12, textMetrics.width + 10, 24);
+              ctx.fillRect(x + 12, y - 12, textMetrics.width + 10, 24);
 
               ctx.fillStyle = '#ffffff';
               ctx.font = 'bold 12px Inter, sans-serif';
-              ctx.fillText(point.label, point.x + 17, point.y + 4);
+              ctx.fillText(point.label, x + 17, y + 4);
             }
           });
         }

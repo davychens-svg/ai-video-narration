@@ -1,0 +1,37 @@
+# GPU-Optimized Requirements for NVIDIA CUDA Systems
+# Use this file for GPU-enabled cloud instances and workstations
+
+# Core dependencies (same as requirements.txt)
+-r requirements.txt
+
+# GPU-Accelerated Libraries
+# Note: Install PyTorch with CUDA separately first:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Flash Attention for faster transformer inference (optional but recommended)
+# Requires CUDA 11.8+ and compatible GPU
+# flash-attn>=2.5.0
+
+# xFormers for memory-efficient attention (optional)
+# xformers>=0.0.23
+
+# NVIDIA Apex for mixed precision training (optional)
+# Install from source: https://github.com/NVIDIA/apex
+# git+https://github.com/NVIDIA/apex.git
+
+# TensorRT for optimized inference (advanced, optional)
+# tensorrt>=8.6.0
+# torch-tensorrt>=1.4.0
+
+# cuDNN binaries (usually included with PyTorch)
+# nvidia-cudnn-cu12>=8.9.0
+
+# CUDA utilities
+nvidia-ml-py3>=11.495.46
+
+# Performance monitoring
+gpustat>=1.1.1
+py3nvml>=0.2.7
+
+# Additional optimizations
+# bitsandbytes>=0.41.0  # 8-bit optimizers for reduced memory

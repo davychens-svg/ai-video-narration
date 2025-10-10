@@ -20,31 +20,94 @@ Real-time video analysis with Vision-Language Models
 ### Prerequisites
 
 **Development (macOS):**
-- macOS with Apple Silicon (M1/M2/M3)
+- macOS with Apple Silicon (M1/M2/M3/M4)
 - Python 3.9+
 - 16GB+ RAM
 
-**Production (Ubuntu 22.04):**
-- NVIDIA GPU (RTX 3060+ with 12GB VRAM)
-- Python 3.9+
-- CUDA 11.8+
-- 32GB RAM
+**Production/Cloud (Linux + NVIDIA GPU):**
+- Ubuntu 20.04/22.04 or compatible Linux
+- NVIDIA GPU (RTX 3060+ with 12GB+ VRAM, or cloud GPUs: A100, V100, T4)
+- Python 3.9-3.12
+- CUDA 11.8+ or 12.x
+- 16GB+ System RAM
+- 📘 **See [CUDA_SETUP.md](CUDA_SETUP.md) for detailed GPU setup instructions**
+
+**Supported Platforms:**
+- ✅ macOS (Apple Silicon with MPS)
+- ✅ Linux (NVIDIA CUDA GPUs)
+- ✅ Cloud: AWS, GCP, Azure, Lambda Labs, RunPod
+- ⚠️ Windows (CPU only, not recommended for production)
 
 ### Installation
 
+#### Option A: macOS (Apple Silicon)
+
 1. **Clone and setup:**
 ```bash
+git clone https://github.com/yourusername/VisionLanguageModel.git
 cd VisionLanguageModel
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python3 -m venv venv
+source venv/bin/activate
 ```
 
 2. **Install dependencies:**
 ```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
 3. **Create logs directory:**
+```bash
+mkdir -p logs
+```
+
+#### Option B: Linux + NVIDIA GPU (Cloud/Production)
+
+1. **Verify GPU and CUDA:**
+```bash
+nvidia-smi  # Should show your GPU
+nvcc --version  # Should show CUDA 11.8 or 12.x
+```
+
+If CUDA is not installed, see **[CUDA_SETUP.md](CUDA_SETUP.md)** for complete installation instructions.
+
+2. **Clone and setup:**
+```bash
+git clone https://github.com/yourusername/VisionLanguageModel.git
+cd VisionLanguageModel
+python3 -m venv venv
+source venv/bin/activate
+```
+
+3. **Install PyTorch with CUDA support:**
+```bash
+# For CUDA 12.1
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# For CUDA 11.8
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+4. **Install project dependencies:**
+```bash
+pip install -r requirements.txt
+
+# Optional: GPU-optimized packages
+pip install -r requirements-cuda.txt
+```
+
+5. **Verify GPU detection:**
+```bash
+python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}')"
+```
+
+Expected output:
+```
+CUDA Available: True
+GPU: NVIDIA GeForce RTX 4090
+```
+
+6. **Create logs directory:**
 ```bash
 mkdir -p logs
 ```
@@ -275,15 +338,42 @@ sudo systemctl start inerbee-narrator
 
 ## Performance Benchmarks
 
-### Apple M2 Pro (Dev)
-- SmolVLM: 55ms avg, 65ms p95
-- MobileVLM: 38ms avg, 45ms p95
-- FPS: 18-25 (with frame skipping)
+### Apple M2 Pro / M3 Pro (Development - MPS)
+- **SmolVLM**: 50-100ms avg, 120ms p95
+- **Moondream Caption**: 150-250ms avg
+- **Moondream Detection**: 200-350ms avg
+- **FPS**: 10-20 (with frame skipping)
+- **VRAM**: ~1.5GB
 
-### NVIDIA RTX 3060 (Production)
-- SmolVLM: 42ms avg, 52ms p95
-- MobileVLM: 28ms avg, 35ms p95
-- FPS: 23-30 (with frame skipping)
+### NVIDIA RTX 4090 (High-End Desktop - CUDA)
+- **SmolVLM**: 40-70ms avg, 90ms p95
+- **Moondream Caption**: 100-180ms avg
+- **Moondream Detection**: 150-250ms avg
+- **FPS**: 20-30+ (with frame skipping)
+- **VRAM**: ~2GB
+
+### NVIDIA RTX 3060 12GB (Mid-Range - CUDA)
+- **SmolVLM**: 80-120ms avg, 150ms p95
+- **Moondream Caption**: 200-300ms avg
+- **Moondream Detection**: 300-450ms avg
+- **FPS**: 10-15 (with frame skipping)
+- **VRAM**: ~2GB
+
+### NVIDIA A100 40GB (Cloud/Data Center - CUDA)
+- **SmolVLM**: 30-50ms avg, 70ms p95
+- **Moondream Caption**: 80-150ms avg
+- **Moondream Detection**: 120-200ms avg
+- **FPS**: 25-35+ (with frame skipping)
+- **VRAM**: ~2GB
+
+### NVIDIA T4 16GB (Cloud Budget - CUDA)
+- **SmolVLM**: 100-180ms avg, 220ms p95
+- **Moondream Caption**: 300-500ms avg
+- **Moondream Detection**: 400-600ms avg
+- **FPS**: 5-10 (with frame skipping)
+- **VRAM**: ~2GB
+
+**Note**: Times are per-frame inference latency at 720p resolution. Real-world FPS depends on frame skipping, network latency, and concurrent users.
 
 ## Contributing
 

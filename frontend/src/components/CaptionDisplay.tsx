@@ -1,9 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { MessageSquare, Download, Trash2, Zap, Clock } from 'lucide-react';
+import { MessageSquare, Download, Trash2, Zap } from 'lucide-react';
 
 export interface Caption {
   id: string;

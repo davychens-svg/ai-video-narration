@@ -1,21 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { VideoStreaming } from './components/VideoStreaming';
 import { ModelSelector, ModelType, MoondreamFeature } from './components/ModelSelector';
 import { CaptionDisplay } from './components/CaptionDisplay';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { SettingsDialog } from './components/SettingsDialog';
 import { useWebSocket } from './hooks/useWebSocket';
-import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
-import { Button } from './components/ui/button';
-import { Badge } from './components/ui/badge';
 import { Toaster, toast } from 'sonner';
-import {
-  Eye,
-  Settings,
-  Zap,
-  Monitor,
-  Smartphone
-} from 'lucide-react';
+import { Eye } from 'lucide-react';
 
 interface Detection {
   bbox: [number, number, number, number];
@@ -34,7 +25,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState<ModelType>('smolvlm');
   const [moondreamFeature, setMoondreamFeature] = useState<MoondreamFeature>('caption');
   const [customQuery, setCustomQuery] = useState('What objects are visible in this scene?');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isModelSwitching, setIsModelSwitching] = useState(false);
   const [videoStreamActive, setVideoStreamActive] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detections, setDetections] = useState<Detection[]>([]);
@@ -54,23 +45,49 @@ export default function App() {
   });
 
   // WebSocket connection
+  const applySceneData = useCallback((payload: any) => {
+    if (payload?.detections && Array.isArray(payload.detections)) {
+      setDetections(payload.detections);
+    } else {
+      setDetections([]);
+    }
+
+    if (payload?.points && Array.isArray(payload.points)) {
+      const labelBase = payload?.object ? String(payload.object) : '';
+      const labelSuffix = payload?.metadata?.fallback_used ? ' (est)' : '';
+      const formattedPoints = payload.points.map((p: any) => ({
+        x: p[0] ?? p.x,
+        y: p[1] ?? p.y,
+        label: labelBase ? `${labelBase}${labelSuffix}` : undefined
+      }));
+      setPoints(formattedPoints);
+    } else {
+      setPoints([]);
+    }
+  }, []);
+
   const {
     isConnected: wsConnected,
     captions,
     lastError,
-    lastHeartbeat,
-    connect: connectWS,
-    disconnect: disconnectWS,
     sendMessage,
     clearCaptions,
     exportCaptions,
-    addCaption
+    addCaption,
+    currentModel
   } = useWebSocket({
     url: settings.websocketUrl,
     autoReconnect: settings.autoReconnect,
     maxRetries: settings.maxRetries,
-    debugMode: settings.debugMode
+    debugMode: settings.debugMode,
+    onCaptionData: applySceneData
   });
+
+  useEffect(() => {
+    setIsModelSwitching(currentModel !== selectedModel);
+  }, [currentModel, selectedModel]);
+
+  const modelReady = currentModel === selectedModel && !isModelSwitching;
 
   // Backend connection status (simplified for demo)
   const [backendConnected, setBackendConnected] = useState(false);
@@ -92,23 +109,67 @@ export default function App() {
     return () => clearInterval(interval);
   }, [settings.serverUrl]);
 
+  const normalizeQuery = useCallback((value: string) => {
+    const trimmed = value?.trim() ?? '';
+    return trimmed.length > 0 ? trimmed : null;
+  }, []);
+
+  const pushConfiguration = useCallback(
+    (
+      model: ModelType,
+      feature: MoondreamFeature | null,
+      queryValue: string | null,
+      successMessage: string | undefined = undefined,
+      extraData: Record<string, unknown> = {}
+    ) => {
+      if (!wsConnected) {
+        return false;
+      }
+
+      sendMessage({
+        type: 'configure',
+        data: {
+          model,
+          feature,
+          query: queryValue,
+          response_length: settings.responseLength,
+          ...extraData
+        }
+      });
+
+      if (successMessage) {
+        toast.success(successMessage);
+      }
+
+      return true;
+    },
+    [wsConnected, sendMessage, settings.responseLength]
+  );
+
   // Handle video stream events
   const handleStreamReady = (stream: MediaStream | null) => {
     setVideoStreamActive(!!stream);
     
     if (stream) {
       toast.success('Video stream started successfully');
-      
+
+      if (currentModel !== selectedModel) {
+        sendMessage({
+          type: 'switch_model',
+          model: selectedModel
+        });
+      }
+
       // Send model configuration to backend
-      sendMessage({
-        type: 'configure',
-        data: {
-          model: selectedModel,
-          feature: selectedModel === 'moondream' ? moondreamFeature : null,
-          query: customQuery || null, // Send query for both models if provided
-          videoQuality: settings.videoQuality,
-          framerate: settings.framerate
-        }
+      const feature = selectedModel === 'moondream' ? moondreamFeature : null;
+      const queryValue =
+        selectedModel === 'moondream'
+          ? (feature === 'caption' ? null : normalizeQuery(customQuery))
+          : normalizeQuery(customQuery);
+
+      pushConfiguration(selectedModel, feature, queryValue, undefined, {
+        videoQuality: settings.videoQuality,
+        framerate: settings.framerate
       });
     } else {
       toast.info('Video stream stopped');
@@ -117,25 +178,36 @@ export default function App() {
 
   // Handle model changes
   const handleModelChange = (model: ModelType) => {
+    if (selectedModel === model) {
+      return;
+    }
+
     setSelectedModel(model);
 
-    if (videoStreamActive) {
-      // First, switch the model on the backend
+    if (wsConnected && currentModel !== model) {
       sendMessage({
         type: 'switch_model',
-        model: model
+        model
       });
+    }
 
-      // Then configure the mode and query
-      sendMessage({
-        type: 'configure',
-        data: {
-          model: model,
-          feature: model === 'moondream' ? moondreamFeature : null,
-          query: customQuery || null // Send query for both models if provided
-        }
-      });
+    // Configure mode/query regardless of switching state
+    const feature = model === 'moondream' ? moondreamFeature : null;
+    const queryValue =
+      model === 'moondream'
+        ? (feature === 'caption' ? null : normalizeQuery(customQuery))
+        : normalizeQuery(customQuery);
+    pushConfiguration(
+      model,
+      feature,
+      queryValue,
+      undefined,
+      model === 'moondream'
+        ? { videoQuality: settings.videoQuality, framerate: settings.framerate }
+        : {}
+    );
 
+    if (videoStreamActive) {
       toast.info(`Switching to ${model === 'smolvlm' ? 'SmolVLM' : 'Moondream'} model...`);
     }
   };
@@ -143,60 +215,49 @@ export default function App() {
   const handleMoondreamFeatureChange = (feature: MoondreamFeature) => {
     setMoondreamFeature(feature);
     
-    if (videoStreamActive && selectedModel === 'moondream') {
-      sendMessage({
-        type: 'configure',
-        data: {
-          model: selectedModel,
-          feature: feature,
-          query: feature === 'query' ? customQuery : null
-        }
-      });
-      
+    if (selectedModel === 'moondream') {
+      const queryValue =
+        feature === 'caption'
+          ? null
+          : normalizeQuery(customQuery);
+
+      pushConfiguration('moondream', feature, queryValue);
       toast.info(`Switched to ${feature} feature`);
     }
   };
 
   const handleCustomQueryChange = (query: string) => {
     setCustomQuery(query);
-
-    // For Moondream, auto-update on change (with debounce)
-    // For SmolVLM, only update when Send button is clicked
-    if (videoStreamActive && selectedModel === 'moondream') {
-      setTimeout(() => {
-        sendMessage({
-          type: 'configure',
-          data: {
-            model: selectedModel,
-            feature: moondreamFeature,
-            query: query || null
-          }
-        });
-      }, 1000);
-    }
   };
 
   const handleSendQuery = () => {
-    if (!customQuery.trim() || !videoStreamActive) return;
+    const trimmedQuery = normalizeQuery(customQuery);
+    if (!trimmedQuery || !videoStreamActive) return;
 
-    sendMessage({
-      type: 'configure',
-      data: {
-        model: selectedModel,
-        feature: selectedModel === 'moondream' ? moondreamFeature : null,
-        query: customQuery
-      }
-    });
+    const success = pushConfiguration(
+      selectedModel,
+      selectedModel === 'moondream' ? moondreamFeature : null,
+      trimmedQuery,
+      'Query sent to SmolVLM'
+    );
 
-    toast.success('Query sent to SmolVLM');
+    if (!success) {
+      toast.error('Unable to send query – WebSocket not connected');
+    }
   };
 
-  const handleReconnect = () => {
-    disconnectWS();
-    setTimeout(() => {
-      connectWS();
-      toast.info('Attempting to reconnect...');
-    }, 1000);
+  const handleSendMoondreamSettings = () => {
+    if (selectedModel !== 'moondream') {
+      return;
+    }
+
+    const feature = moondreamFeature;
+    const queryValue = feature === 'caption' ? null : normalizeQuery(customQuery);
+    const sent = pushConfiguration('moondream', feature, queryValue, 'Moondream settings updated');
+
+    if (!sent) {
+      toast.error('Unable to update Moondream settings – WebSocket not connected');
+    }
   };
 
   const handleOpenSettings = () => {
@@ -212,25 +273,7 @@ export default function App() {
       // Add to captions using the WebSocket hook's addCaption method
       if (message.type === 'caption' && message.data) {
         addCaption(message.data);
-
-        // Extract detections if present
-        if (message.data.detections && Array.isArray(message.data.detections)) {
-          setDetections(message.data.detections);
-        } else {
-          setDetections([]);
-        }
-
-        // Extract points if present
-        if (message.data.points && Array.isArray(message.data.points)) {
-          const formattedPoints = message.data.points.map((p: any) => ({
-            x: p[0] || p.x,
-            y: p[1] || p.y,
-            label: message.data.object || ''
-          }));
-          setPoints(formattedPoints);
-        } else {
-          setPoints([]);
-        }
+        applySceneData(message.data);
       }
     };
 
@@ -239,7 +282,7 @@ export default function App() {
     return () => {
       window.removeEventListener('frame-result', handleFrameResult as EventListener);
     };
-  }, [addCaption]);
+  }, [addCaption, applySceneData]);
 
   // Show errors as toasts
   useEffect(() => {
@@ -297,6 +340,7 @@ export default function App() {
                   }
                   backend={selectedModel === 'moondream' ? 'transformers' : 'llamacpp'}
                   prompt={customQuery}
+                  modelReady={modelReady}
                   responseLength={settings.responseLength}
                 />
               </div>
@@ -310,7 +354,9 @@ export default function App() {
                   customQuery={customQuery}
                   onCustomQueryChange={handleCustomQueryChange}
                   onSendQuery={handleSendQuery}
-                  isProcessing={isProcessing}
+                  onMoondreamSubmit={handleSendMoondreamSettings}
+                  isProcessing={isModelSwitching}
+                  responseLength={settings.responseLength}
                 />
               </div>
             </div>
@@ -322,10 +368,8 @@ export default function App() {
                   webSocketConnected={wsConnected}
                   backendConnected={backendConnected}
                   videoStreamActive={videoStreamActive}
-                  onReconnect={handleReconnect}
                   onOpenSettings={handleOpenSettings}
                   serverUrl={settings.serverUrl}
-                  lastHeartbeat={lastHeartbeat || undefined}
                 />
               </div>
               

@@ -1,13 +1,9 @@
-import React from 'react';
-import { Card, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { 
   Wifi, 
   WifiOff, 
   Server, 
   Video, 
-  RefreshCw,
   Settings
 } from 'lucide-react';
 
@@ -15,20 +11,16 @@ interface ConnectionStatusProps {
   webSocketConnected: boolean;
   backendConnected: boolean;
   videoStreamActive: boolean;
-  onReconnect: () => void;
   onOpenSettings: () => void;
   serverUrl: string;
-  lastHeartbeat?: string;
 }
 
 export function ConnectionStatus({
   webSocketConnected,
   backendConnected,
   videoStreamActive,
-  onReconnect,
   onOpenSettings,
-  serverUrl,
-  lastHeartbeat
+  serverUrl
 }: ConnectionStatusProps) {
   const getStatusColor = (connected: boolean) => {
     return connected ? 'bg-green-500' : 'bg-red-500';

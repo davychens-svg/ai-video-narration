@@ -1,6 +1,3 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -19,7 +16,9 @@ interface ModelSelectorProps {
   customQuery: string;
   onCustomQueryChange: (query: string) => void;
   onSendQuery?: () => void;
+  onMoondreamSubmit?: () => void;
   isProcessing: boolean;
+  responseLength: 'short' | 'medium' | 'long';
 }
 
 export function ModelSelector({
@@ -30,7 +29,9 @@ export function ModelSelector({
   customQuery,
   onCustomQueryChange,
   onSendQuery,
-  isProcessing
+  onMoondreamSubmit,
+  isProcessing,
+  responseLength
 }: ModelSelectorProps) {
   const modelInfo = {
     smolvlm: {
@@ -68,6 +69,12 @@ export function ModelSelector({
       description: 'Detect specific points and coordinates',
       icon: <Target className="w-4 h-4" />
     }
+  };
+
+  const responseLengthLabels: Record<'short' | 'medium' | 'long', string> = {
+    short: 'Short',
+    medium: 'Medium',
+    long: 'Long'
   };
 
   return (
@@ -159,6 +166,7 @@ export function ModelSelector({
                 placeholder="Enter your prompt for the video analysis. e.g., 'What objects are visible in this scene?', 'Describe what you see', 'What colors are present?'"
                 value={customQuery}
                 onChange={(e) => onCustomQueryChange(e.target.value)}
+                onFocus={(e) => e.target.select()}
                 disabled={isProcessing}
                 className="min-h-[80px] bg-background/50 border-input text-foreground placeholder:text-muted-foreground"
                 onKeyDown={(e) => {
@@ -228,6 +236,15 @@ export function ModelSelector({
               </p>
             </div>
 
+            {moondreamFeature === 'caption' && (
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Response length preference</span>
+                <Badge variant="outline" className="uppercase tracking-wide">
+                  {responseLengthLabels[responseLength]}
+                </Badge>
+              </div>
+            )}
+
             {/* Custom Query Input */}
             {moondreamFeature === 'query' && (
               <div className="space-y-2">
@@ -237,13 +254,31 @@ export function ModelSelector({
                   placeholder="What would you like to know about the video? e.g., 'What objects are visible in the scene?'"
                   value={customQuery}
                   onChange={(e) => onCustomQueryChange(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   disabled={isProcessing}
                   className="min-h-[80px] bg-background/50 border-input text-foreground placeholder:text-muted-foreground"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && customQuery.trim() && onMoondreamSubmit) {
+                      e.preventDefault();
+                      onMoondreamSubmit();
+                    }
+                  }}
                 />
-                <p className="text-xs text-green-400 flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Query will be applied automatically when video is running
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
+                    <Check className="w-3 h-3" />
+                    Use the update button to send your question to Moondream
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={onMoondreamSubmit}
+                    disabled={!customQuery.trim() || isProcessing}
+                    className="flex items-center gap-2 shrink-0"
+                  >
+                    <Send className="w-3 h-3" />
+                    Update
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -256,13 +291,31 @@ export function ModelSelector({
                   placeholder="e.g., 'person', 'car', 'book', or leave empty for all objects"
                   value={customQuery}
                   onChange={(e) => onCustomQueryChange(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   disabled={isProcessing}
                   className="bg-background/50 border-input text-foreground placeholder:text-muted-foreground"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && onMoondreamSubmit) {
+                      e.preventDefault();
+                      onMoondreamSubmit();
+                    }
+                  }}
                 />
-                <p className="text-xs text-green-400 flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Detection settings applied - leave empty to detect all objects
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
+                    <Check className="w-3 h-3" />
+                    Leave blank to detect everything or specify a target and press update
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={onMoondreamSubmit}
+                    disabled={isProcessing}
+                    className="flex items-center gap-2 shrink-0"
+                  >
+                    <Send className="w-3 h-3" />
+                    Update
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -275,13 +328,31 @@ export function ModelSelector({
                   placeholder="e.g., 'person', 'face', 'hand'"
                   value={customQuery}
                   onChange={(e) => onCustomQueryChange(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   disabled={isProcessing}
                   className="bg-background/50 border-input text-foreground placeholder:text-muted-foreground"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && customQuery.trim() && onMoondreamSubmit) {
+                      e.preventDefault();
+                      onMoondreamSubmit();
+                    }
+                  }}
                 />
-                <p className="text-xs text-green-400 flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Point detection settings applied
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
+                    <Check className="w-3 h-3" />
+                    Enter the object to locate, then press update
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={onMoondreamSubmit}
+                    disabled={!customQuery.trim() || isProcessing}
+                    className="flex items-center gap-2 shrink-0"
+                  >
+                    <Send className="w-3 h-3" />
+                    Update
+                  </Button>
+                </div>
               </div>
             )}
           </div>

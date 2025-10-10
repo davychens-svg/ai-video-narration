@@ -1,4 +1,3 @@
-import React from 'react';
 import { Languages } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Language, getTranslations } from '../lib/i18n';

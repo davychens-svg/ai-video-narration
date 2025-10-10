@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,12 +6,8 @@ import {
   DialogTitle,
 } from './ui/dialog';
 import { Label } from './ui/label';
-import { Input } from './ui/input';
 import { Button } from './ui/button';
-import { Separator } from './ui/separator';
-import { Switch } from './ui/switch';
 import { Slider } from './ui/slider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -151,13 +146,13 @@ export function SettingsDialog({
             <Button 
               variant="outline" 
               onClick={() => onOpenChange(false)}
-              className="flex-1"
+              className="flex-1 hover:bg-accent"
             >
               Cancel
             </Button>
             <Button 
               onClick={() => onOpenChange(false)}
-              className="flex-1"
+              className="flex-1 border border-border hover:bg-accent"
             >
               Save Settings
             </Button>

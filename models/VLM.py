@@ -313,9 +313,16 @@ class Moondream(VLMModel):
             enc_image = self.model.encode_image(image)
 
             # Generate caption
+            prompts = {
+                "short": "Describe this image in a single concise sentence.",
+                "normal": "Describe this image in detail.",
+                "long": "Provide an in-depth, multi-sentence description of this image."
+            }
+            question = prompts.get(length, prompts["normal"])
+
             caption = self.model.answer_question(
                 enc_image,
-                "Describe this image in detail.",
+                question,
                 self.tokenizer
             )
 
@@ -366,15 +373,37 @@ class Moondream(VLMModel):
 
         try:
             # Call model.detect directly with PIL image
-            # API returns: {"objects": [{"bbox": [x1, y1, x2, y2], "label": "object"}]}
+            # API returns: {"objects": [{"x_min": 0.1, "y_min": 0.2, "x_max": 0.3, "y_max": 0.4}, ...]}
+            # Coordinates are normalized (0-1), need to convert to pixels
             if hasattr(self.model, 'detect'):
                 result = self.model.detect(image, object_description)
+
+                # Get image dimensions for coordinate conversion
+                img_width, img_height = image.size
 
                 # Extract objects from result dictionary
                 if isinstance(result, dict) and "objects" in result:
                     objects = result["objects"]
-                    logger.info(f"Detected {len(objects)} objects: {objects}")
-                    return objects if isinstance(objects, list) else []
+                    logger.info(f"Detected {len(objects)} objects (raw): {objects}")
+
+                    # Convert normalized coordinates to pixel coordinates and add bbox format
+                    converted_objects = []
+                    for obj in objects:
+                        if isinstance(obj, dict):
+                            # Moondream returns x_min, y_min, x_max, y_max as normalized (0-1)
+                            x_min = obj.get('x_min', 0) * img_width
+                            y_min = obj.get('y_min', 0) * img_height
+                            x_max = obj.get('x_max', 0) * img_width
+                            y_max = obj.get('y_max', 0) * img_height
+
+                            converted_objects.append({
+                                'bbox': [x_min, y_min, x_max, y_max],
+                                'label': object_description,  # Use the query as label
+                                'confidence': None  # Moondream doesn't provide confidence scores
+                            })
+
+                    logger.info(f"Converted {len(converted_objects)} detections to pixel coordinates")
+                    return converted_objects
 
                 logger.warning(f"Detect result format unexpected: {result}")
                 return []
@@ -400,20 +429,34 @@ class Moondream(VLMModel):
 
         try:
             # Call model.point directly with PIL image
-            # API returns: {"points": [[x1, y1], [x2, y2], ...]}
+            # API returns: {"points": [{"x": 0.5, "y": 0.3}, ...]}
+            # Coordinates are normalized (0-1), need to convert to pixels
             if hasattr(self.model, 'point'):
                 result = self.model.point(image, object_description)
+
+                # Get image dimensions for coordinate conversion
+                img_width, img_height = image.size
 
                 # Extract points from result dictionary
                 if isinstance(result, dict) and "points" in result:
                     points = result["points"]
-                    logger.info(f"Found {len(points)} points: {points}")
+                    logger.info(f"Found {len(points)} points (raw): {points}")
 
-                    # Convert to list of tuples
+                    # Convert normalized coordinates to pixel coordinates
                     formatted_points = []
                     for p in points:
-                        if isinstance(p, (list, tuple)) and len(p) >= 2:
-                            formatted_points.append((int(p[0]), int(p[1])))
+                        if isinstance(p, dict):
+                            # Moondream returns x, y as normalized (0-1)
+                            x = int(p.get('x', 0) * img_width)
+                            y = int(p.get('y', 0) * img_height)
+                            formatted_points.append((x, y))
+                        elif isinstance(p, (list, tuple)) and len(p) >= 2:
+                            # Fallback for list/tuple format (shouldn't happen with new Moondream)
+                            x = int(p[0] * img_width)
+                            y = int(p[1] * img_height)
+                            formatted_points.append((x, y))
+
+                    logger.info(f"Converted {len(formatted_points)} points to pixel coordinates: {formatted_points}")
                     return formatted_points
 
                 logger.warning(f"Point result format unexpected: {result}")
@@ -438,7 +481,7 @@ class VLMProcessor:
     def __init__(self, model_name: str = "smolvlm"):
         self.current_model_name = model_name
         self.model: Optional[VLMModel] = None
-        self.target_size = (128, 128)  # Ultra-fast: smallest usable size for real-time
+        self.base_target_size = (128, 128)  # Default resize for lightweight models
         self._load_model(model_name)
 
     def _load_model(self, model_name: str):
@@ -450,10 +493,13 @@ class VLMProcessor:
         # Load new model
         if model_name == "smolvlm":
             self.model = SmolVLM()
+            self.base_target_size = (128, 128)
         elif model_name == "mobilevlm":
             self.model = MobileVLM()
+            self.base_target_size = (160, 160)
         elif model_name == "moondream":
             self.model = Moondream()
+            self.base_target_size = (384, 384)
         else:
             raise ValueError(f"Unknown model: {model_name}")
 
@@ -469,27 +515,51 @@ class VLMProcessor:
 
         logger.info(f"Model switched to {model_name}")
 
-    def preprocess_frame(self, frame: np.ndarray) -> Image.Image:
+    def preprocess_frame(
+        self,
+        frame: np.ndarray,
+        mode: Literal["caption", "query", "detect", "point"] = "caption"
+    ) -> Tuple[Image.Image, float, float]:
         """
         Preprocess video frame for VLM
-        - Resize to optimal size
+        - Resize to optimal size (model and mode dependent)
         - Convert to PIL Image
+        - Return scale factors to map predictions back to original resolution
         """
-        # Resize to target size (fast)
         import cv2
-        resized = cv2.resize(frame, self.target_size, interpolation=cv2.INTER_AREA)
 
-        # Convert to PIL
+        orig_height, orig_width = frame.shape[:2]
+
+        if isinstance(self.model, Moondream):
+            max_side = 512 if mode in ("detection", "point") else 384
+            if max(orig_width, orig_height) > max_side:
+                scale = max_side / max(orig_width, orig_height)
+                new_width = max(1, int(round(orig_width * scale)))
+                new_height = max(1, int(round(orig_height * scale)))
+            else:
+                new_width, new_height = orig_width, orig_height
+        else:
+            new_width, new_height = self.base_target_size
+
+        if new_width != orig_width or new_height != orig_height:
+            resized = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        else:
+            resized = frame
+
+        scale_x = orig_width / new_width if new_width else 1.0
+        scale_y = orig_height / new_height if new_height else 1.0
+
         image = Image.fromarray(resized)
 
-        return image
+        return image, scale_x, scale_y
 
     async def process_frame(
         self,
         frame: np.ndarray,
         mode: Literal["caption", "query", "detect", "point"] = "caption",
         user_input: Optional[str] = None,
-        click_coords: Optional[Tuple[int, int]] = None
+        click_coords: Optional[Tuple[int, int]] = None,
+        response_length: str = "medium"
     ) -> Dict[str, Any]:
         """
         Process video frame and generate output
@@ -502,12 +572,20 @@ class VLMProcessor:
             Dictionary with result and metadata
         """
         # Preprocess frame
-        image = self.preprocess_frame(frame)
+        image, scale_x, scale_y = self.preprocess_frame(frame, mode)
 
         # Handle different models and modes
         if isinstance(self.model, Moondream):
             # Moondream supports all modes
-            result = await self._process_moondream(image, mode, user_input, click_coords)
+            result = await self._process_moondream(
+                image,
+                mode,
+                user_input,
+                click_coords,
+                response_length,
+                scale_x,
+                scale_y
+            )
         else:
             # SmolVLM/MobileVLM support caption and custom queries
             result = await self._process_simple_vlm(image, mode, user_input)
@@ -540,19 +618,66 @@ class VLMProcessor:
             "model": self.current_model_name
         }
 
+    @staticmethod
+    def _scale_bbox(bbox: Any, scale_x: float, scale_y: float) -> Optional[List[int]]:
+        if bbox is None:
+            return None
+
+        if isinstance(bbox, dict):
+            x1 = bbox.get('x_min') or bbox.get('left') or bbox.get('x1')
+            y1 = bbox.get('y_min') or bbox.get('top') or bbox.get('y1')
+            x2 = bbox.get('x_max') or bbox.get('right') or bbox.get('x2')
+            y2 = bbox.get('y_max') or bbox.get('bottom') or bbox.get('y2')
+        elif isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+            x1, y1, x2, y2 = bbox[:4]
+        else:
+            return None
+
+        if None in (x1, y1, x2, y2):
+            return None
+
+        return [
+            int(round(x1 * scale_x)),
+            int(round(y1 * scale_y)),
+            int(round(x2 * scale_x)),
+            int(round(y2 * scale_y))
+        ]
+
+    @staticmethod
+    def _scale_points(points: List[Tuple[int, int]], scale_x: float, scale_y: float) -> List[List[int]]:
+        scaled: List[List[int]] = []
+        for point in points:
+            if isinstance(point, (list, tuple)) and len(point) >= 2:
+                x, y = point[0], point[1]
+                scaled.append([
+                    int(round(x * scale_x)),
+                    int(round(y * scale_y))
+                ])
+        return scaled
+
     async def _process_moondream(
         self,
         image: Image.Image,
         mode: str,
         user_input: Optional[str] = None,
-        click_coords: Optional[Tuple[int, int]] = None
+        click_coords: Optional[Tuple[int, int]] = None,
+        response_length: str = "medium",
+        scale_x: float = 1.0,
+        scale_y: float = 1.0
     ) -> Dict[str, Any]:
         """Process with Moondream (all modes supported)"""
         if mode == "caption":
+            length_map = {
+                "short": "short",
+                "medium": "normal",
+                "long": "long"
+            }
+            moondream_length = length_map.get(response_length, "normal")
+
             caption = await asyncio.to_thread(
                 self.model.caption,
                 image,
-                length="normal"
+                length=moondream_length
             )
             return {
                 "type": "caption",
@@ -585,17 +710,62 @@ class VLMProcessor:
             }
 
         elif mode == "detection":
-            if not user_input:
-                user_input = "all objects"  # Default to detecting all objects
+            raw_query = user_input or ""
+            if isinstance(raw_query, str):
+                targets = [t.strip() for t in raw_query.split(',') if t.strip()]
+            else:
+                targets = []
 
-            detections = await asyncio.to_thread(
-                self.model.detect,
-                image,
-                user_input
-            )
+            if not targets:
+                targets = ["all objects"]
+
+            detections: List[Dict[str, Any]] = []
+
+            for target in targets:
+                raw_results = await asyncio.to_thread(
+                    self.model.detect,
+                    image,
+                    target
+                )
+
+                if not raw_results:
+                    continue
+
+                for det in raw_results:
+                    scaled_det: Dict[str, Any] = dict(det) if isinstance(det, dict) else {}
+                    bbox = scaled_det.get('bbox')
+                    scaled_bbox = self._scale_bbox(bbox, scale_x, scale_y)
+                    if not scaled_bbox:
+                        continue
+
+                    scaled_det['bbox'] = scaled_bbox
+
+                    confidence = (
+                        scaled_det.get('confidence')
+                        or scaled_det.get('score')
+                        or scaled_det.get('prob')
+                    )
+                    if confidence is not None:
+                        try:
+                            scaled_det['confidence'] = float(confidence)
+                        except (TypeError, ValueError):
+                            scaled_det['confidence'] = None
+                    else:
+                        scaled_det['confidence'] = None
+
+                    label = scaled_det.get('label')
+                    if not label or str(label).lower() == 'object':
+                        label = target
+                    scaled_det['label'] = str(label)
+
+                    detections.append(scaled_det)
+
             # Format detections as text for display
             if detections:
-                detection_text = f"Detected {len(detections)} objects: " + ", ".join([d.get('label', 'object') for d in detections])
+                labels = [f"\"{det.get('label', 'object')}\"" for det in detections]
+                count = len(detections)
+                object_word = "object" if count == 1 else "objects"
+                detection_text = f"Detected {count} {object_word}: " + ", ".join(labels)
             else:
                 detection_text = "No objects detected"
 
@@ -603,7 +773,7 @@ class VLMProcessor:
                 "type": "caption",
                 "caption": detection_text,
                 "detections": detections,
-                "object": user_input,
+                "object": raw_query,
                 "mode": mode,
                 "model": self.current_model_name
             }
@@ -617,24 +787,53 @@ class VLMProcessor:
                     "model": self.current_model_name
                 }
 
-            points = await asyncio.to_thread(
+            raw_points = await asyncio.to_thread(
                 self.model.point,
                 image,
                 user_input
             )
+
+            scaled_points = self._scale_points(raw_points or [], scale_x, scale_y)
+            fallback_used = False
+
+            if not scaled_points:
+                # Fallback: try object detection and compute point centers
+                raw_detections = await asyncio.to_thread(
+                    self.model.detect,
+                    image,
+                    user_input
+                )
+                if raw_detections:
+                    scaled_points = []
+                    for det in raw_detections:
+                        bbox = det.get('bbox') if isinstance(det, dict) else None
+                        scaled_bbox = self._scale_bbox(bbox, scale_x, scale_y)
+                        if scaled_bbox:
+                            x1, y1, x2, y2 = scaled_bbox
+                            center_x = int(round((x1 + x2) / 2))
+                            center_y = int(round((y1 + y2) / 2))
+                            scaled_points.append([center_x, center_y])
+                    if scaled_points:
+                        fallback_used = True
+
             # Format points as text for display
-            if points:
-                point_text = f"Found {len(points)} point(s) for '{user_input}': " + ", ".join([f"({x}, {y})" for x, y in points])
+            if scaled_points:
+                summary_label = "Estimated" if fallback_used else "Found"
+                point_text = (
+                    f"{summary_label} {len(scaled_points)} point(s) for '{user_input}': "
+                    + ", ".join([f"({x}, {y})" for x, y in scaled_points])
+                )
             else:
                 point_text = f"Could not locate '{user_input}'"
 
             return {
                 "type": "caption",
                 "caption": point_text,
-                "points": points,
+                "points": scaled_points,
                 "object": user_input,
                 "mode": mode,
-                "model": self.current_model_name
+                "model": self.current_model_name,
+                "fallback_used": fallback_used
             }
 
         else:
@@ -645,7 +844,7 @@ class VLMProcessor:
         """Warmup model with dummy inputs"""
         logger.info(f"Warming up {self.current_model_name}...")
 
-        dummy_image = Image.new('RGB', self.target_size, color='white')
+        dummy_image = Image.new('RGB', self.base_target_size, color='white')
 
         for i in range(num_iterations):
             await asyncio.to_thread(
@@ -667,7 +866,7 @@ class VLMProcessor:
             "model": self.current_model_name,
             "ready": self.model.is_ready if self.model else False,
             "device": str(self.model.model.device) if self.model and self.model.model else "unknown",
-            "target_size": self.target_size,
+            "target_size": self.base_target_size,
             "supports_multimodal": isinstance(self.model, Moondream)
         }
 

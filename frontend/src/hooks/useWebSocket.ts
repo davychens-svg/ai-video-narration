@@ -6,29 +6,33 @@ interface UseWebSocketProps {
   autoReconnect?: boolean;
   maxRetries?: number;
   debugMode?: boolean;
+  onCaptionData?: (data: any) => void;
 }
 
-interface WebSocketMessage {
-  type: 'caption' | 'status' | 'error';
-  data: any;
-  timestamp: string;
-}
+type WebSocketMessage = {
+  type: string;
+  timestamp?: string;
+  [key: string]: any;
+};
 
 export function useWebSocket({ 
   url, 
   autoReconnect = true, 
   maxRetries = 5,
-  debugMode = false 
+  debugMode = false,
+  onCaptionData
 }: UseWebSocketProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [captions, setCaptions] = useState<Caption[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [lastHeartbeat, setLastHeartbeat] = useState<string | null>(null);
+  const [currentModel, setCurrentModel] = useState<string>('smolvlm');
+  const [supportedModes, setSupportedModes] = useState<string[]>([]);
   
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const log = useCallback((message: string) => {
     if (debugMode) {
@@ -79,11 +83,26 @@ export function useWebSocket({
                 latency_ms: message.data.latency_ms
               };
               setCaptions(prev => [...prev, newCaption]);
+              if (onCaptionData) {
+                onCaptionData(message.data);
+              }
               break;
             
             case 'status':
               log(`Status update: ${JSON.stringify(message.data)}`);
               setLastHeartbeat(new Date().toISOString());
+              break;
+
+            case 'model_switched':
+              log(`Model switched to ${message.model}`);
+              setCurrentModel(message.model);
+              if (Array.isArray(message.supported_modes)) {
+                setSupportedModes(message.supported_modes);
+              }
+              break;
+
+            case 'mode_changed':
+              log(`Mode changed to ${message.mode}`);
               break;
             
             case 'error':
@@ -128,7 +147,7 @@ export function useWebSocket({
       log(`Failed to create WebSocket: ${error}`);
       setLastError('Failed to create WebSocket connection');
     }
-  }, [url, autoReconnect, maxRetries, retryCount, log]);
+  }, [url, autoReconnect, maxRetries, retryCount, log, onCaptionData]);
 
   const disconnect = useCallback(() => {
     log('Disconnecting...');
@@ -184,8 +203,8 @@ export function useWebSocket({
     const newCaption: Caption = {
       id: Date.now().toString() + Math.random(),
       timestamp: new Date().toISOString(),
-      content: captionData.caption || captionData.content,
-      model: captionData.model,
+      content: captionData.caption || captionData.content || captionData.error || 'No response',
+      model: captionData.model || 'unknown',
       confidence: captionData.confidence,
       feature: captionData.feature,
       latency_ms: captionData.latency_ms
@@ -199,10 +218,12 @@ export function useWebSocket({
     if (url) {
       connect();
     }
-    
+
     return () => {
       disconnect();
     };
+    // We intentionally avoid depending on `connect`/`disconnect` to prevent rapid re-connect loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
   // Cleanup on unmount
@@ -217,6 +238,8 @@ export function useWebSocket({
     captions,
     lastError,
     lastHeartbeat,
+    currentModel,
+    supportedModes,
     retryCount,
     connect,
     disconnect,

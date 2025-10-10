@@ -67,6 +67,7 @@ relay = MediaRelay()
 current_mode = "caption"  # caption, query, detect, point
 user_query_input = None  # For query mode
 detect_object_input = None  # For detect/point modes
+response_length_setting = "medium"
 
 # Performance monitoring
 class PerformanceMonitor:
@@ -215,7 +216,7 @@ async def process_frames_task():
     """Background task that processes frames from queue"""
     logger.info("Frame processing task started")
 
-    global current_mode, user_query_input, detect_object_input
+    global current_mode, user_query_input, detect_object_input, response_length_setting
 
     while True:
         try:
@@ -231,7 +232,8 @@ async def process_frames_task():
             result = await vlm_processor.process_frame(
                 frame,
                 mode=current_mode,
-                user_input=user_query_input or detect_object_input
+                user_input=user_query_input or detect_object_input,
+                response_length=response_length_setting
             )
             latency_ms = (time.time() - start_time) * 1000
 
@@ -267,7 +269,13 @@ async def broadcast_result(result: Dict, latency_ms: float):
             "model": vlm_processor.current_model if vlm_processor else "unknown",
             "confidence": result.get("confidence"),
             "feature": result.get("mode"),
-            "latency_ms": round(latency_ms, 2)
+            "latency_ms": round(latency_ms, 2),
+            "detections": result.get("detections"),
+            "points": result.get("points"),
+            "object": result.get("object"),
+            "metadata": {
+                "fallback_used": result.get("fallback_used", False)
+            }
         }
     }
 
@@ -315,7 +323,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Handle client messages (e.g., model switching, mode changes, queries)
             try:
-                global current_mode, user_query_input, detect_object_input
+                global current_mode, user_query_input, detect_object_input, response_length_setting
 
                 msg = json.loads(data)
 
@@ -354,18 +362,33 @@ async def websocket_endpoint(websocket: WebSocket):
                     data = msg.get("data", {})
                     query = data.get("query")
                     feature = data.get("feature")
+                    response_length = data.get("response_length")
 
-                    # Update query input
-                    if query:
-                        user_query_input = query
-                        logger.info(f"Query updated: {query}")
-                    else:
-                        user_query_input = None
+                    if isinstance(response_length, str):
+                        normalized_length = response_length.lower()
+                        if normalized_length in {"short", "medium", "long"}:
+                            response_length_setting = normalized_length
+                            logger.info(f"Response length updated: {response_length_setting}")
+
+                    trimmed_query = query.strip() if isinstance(query, str) else None
 
                     # Update mode based on feature for Moondream
                     if feature:
                         current_mode = feature
                         logger.info(f"Mode updated: {feature}")
+
+                    if feature in {"detection", "point"}:
+                        detect_object_input = trimmed_query
+                        user_query_input = None
+                        log_msg = trimmed_query or "all objects"
+                        logger.info(f"Detection target updated: {log_msg}")
+                    else:
+                        user_query_input = trimmed_query
+                        detect_object_input = None
+                        if trimmed_query:
+                            logger.info(f"Query updated: {trimmed_query}")
+                        else:
+                            logger.info("Query cleared")
 
                 elif msg.get("type") == "set_query":
                     # Set user query for query mode
@@ -471,6 +494,8 @@ async def get_stats():
 async def process_frame(params: dict):
     """Process a single frame via HTTP (simpler than WebRTC)"""
     try:
+        global current_mode, user_query_input, detect_object_input, response_length_setting
+
         # Extract base64 image
         image_data = params.get("image")
         if not image_data:
@@ -491,12 +516,19 @@ async def process_frame(params: dict):
         elif frame.shape[2] == 4:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
 
+        req_response_length = params.get("response_length")
+        if isinstance(req_response_length, str):
+            normalized_length = req_response_length.lower()
+            if normalized_length in {"short", "medium", "long"}:
+                response_length_setting = normalized_length
+
         # Process with VLM
         start_time = time.time()
         result = await vlm_processor.process_frame(
             frame,
             mode=current_mode,
-            user_input=user_query_input or detect_object_input
+            user_input=user_query_input or detect_object_input,
+            response_length=response_length_setting
         )
         latency_ms = (time.time() - start_time) * 1000
 
@@ -508,7 +540,11 @@ async def process_frame(params: dict):
             "model": vlm_processor.current_model if vlm_processor else "unknown",
             "confidence": result.get("confidence"),
             "feature": result.get("mode"),
-            "latency_ms": round(latency_ms, 2)
+            "latency_ms": round(latency_ms, 2),
+            "detections": result.get("detections"),
+            "points": result.get("points"),
+            "object": result.get("object"),
+            "fallback_used": result.get("fallback_used", False)
         }
 
     except Exception as e:
@@ -535,8 +571,14 @@ async def process_frame_llamacpp(params: dict):
         prompt = params.get("prompt") or "What objects are visible in this scene?"
 
         # Get response length preference
+        global response_length_setting
+
         response_length = params.get("response_length", "medium")
         logger.info(f"Response length setting: {response_length}")
+
+        normalized_length = response_length.lower() if isinstance(response_length, str) else "medium"
+        if normalized_length in {"short", "medium", "long"}:
+            response_length_setting = normalized_length
 
         # Adjust max_tokens and enhance prompt based on response length
         length_configs = {

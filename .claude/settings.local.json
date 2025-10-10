@@ -31,7 +31,13 @@
       "Bash(bash:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: AI Video Narration System\n\nFeatures:\n- Real-time video analysis with SmolVLM and Moondream models\n- llama.cpp integration for 98.6% speed improvement (30-36s → 0.3-0.6s)\n- React frontend with WebRTC camera capture\n- FastAPI backend with WebSocket support\n- Configurable prompts and video quality settings\n- Performance monitoring and latency tracking\n- Complete deployment guides for macOS and Cloud (NVIDIA)\n\nTech Stack:\n- Frontend: React + TypeScript + Vite + TailwindCSS\n- Backend: FastAPI + Python 3.11\n- Inference: llama.cpp + GGUF models\n- AI Models: SmolVLM-500M, Moondream\n- Hardware: Apple Silicon (Metal) / NVIDIA GPU (CUDA)\n\nPerformance:\n- macOS M1/M2: 250-600ms per frame\n- NVIDIA T4/V100/A100: 100-400ms per frame\n- Real-time inference: <1s target achieved\n\n🚀 Generated with Claude Code\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: AI Video Narration System\n\nFeatures:\n- Real-time video analysis with SmolVLM and Moondream models\n- llama.cpp integration for 98.6% speed improvement (30-36s → 0.3-0.6s)\n- React frontend with WebRTC camera capture\n- FastAPI backend with WebSocket support\n- Configurable prompts and video quality settings\n- Performance monitoring and latency tracking\n- Complete deployment guides for macOS and Cloud (NVIDIA)\n\nTech Stack:\n- Frontend: React + TypeScript + Vite + TailwindCSS\n- Backend: FastAPI + Python 3.11\n- Inference: llama.cpp + GGUF models\n- AI Models: SmolVLM-500M, Moondream\n- Hardware: Apple Silicon (Metal) / NVIDIA GPU (CUDA)\n\nPerformance:\n- macOS M1/M2: 250-600ms per frame\n- NVIDIA T4/V100/A100: 100-400ms per frame\n- Real-time inference: <1s target achieved\n\n🚀 Generated with Claude Code\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(rm:*)",
+      "Bash(./start_llamacpp_server.sh:*)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []

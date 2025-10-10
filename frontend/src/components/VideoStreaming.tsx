@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -30,6 +30,7 @@ interface VideoStreamingProps {
   backend?: 'transformers' | 'llamacpp';
   prompt?: string;
   responseLength?: 'short' | 'medium' | 'long';
+  modelReady?: boolean;
 }
 
 export function VideoStreaming({
@@ -43,7 +44,8 @@ export function VideoStreaming({
   overlayMode = 'none',
   backend = 'llamacpp',
   prompt = 'What objects are visible in this scene?',
-  responseLength = 'medium'
+  responseLength = 'medium',
+  modelReady = true
 }: VideoStreamingProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -133,6 +135,10 @@ export function VideoStreaming({
           return;
         }
 
+        if (!modelReady) {
+          return;
+        }
+
         isProcessing = true;
 
         try {
@@ -190,7 +196,7 @@ export function VideoStreaming({
     } catch (err) {
       console.error('Failed to set up frame capture:', err);
     }
-  }, [videoQuality, backend, serverUrl, prompt, responseLength, captureInterval]);
+  }, [videoQuality, backend, serverUrl, prompt, responseLength, captureInterval, modelReady]);
 
   const stopCameraStream = () => {
     // Stop frame capture interval
@@ -335,7 +341,7 @@ export function VideoStreaming({
       frameIntervalRef.current = null;
       setupHTTPFrameCapture();
     }
-  }, [captureInterval, responseLength, backend, isStreaming, setupHTTPFrameCapture]);
+  }, [captureInterval, responseLength, backend, modelReady, isStreaming, setupHTTPFrameCapture]);
 
   useEffect(() => {
     return () => {
