@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Complete deployment guide for AI Video Narration System on macOS and Cloud (NVIDIA GPU).
+Complete deployment guide for Vision AI Demo on macOS and Cloud (NVIDIA GPU).
 
 ## Table of Contents
 

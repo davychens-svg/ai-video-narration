@@ -1,11 +1,11 @@
-# Context Engineering Guide for Inerbee Demo
+# Context Engineering Guide
 
 ## Overview
-This document outlines the context engineering strategies and best practices for building a **high-performance** real-time video narrator for the Inerbee demo. Performance is critical - we prioritize speed, low latency, and minimal resource usage through small models and optimized context strategies.
+This document outlines the context engineering strategies and best practices for building a **high-performance** real-time video analysis system. Performance is critical - we prioritize speed, low latency, and minimal resource usage through small models and optimized context strategies.
 
 ## Performance-First Philosophy 🚀
 
-**Target Metrics for Inerbee Demo:**
+**Target Metrics:**
 - **Latency**: <100ms per frame (target: 50-70ms)
 - **Throughput**: 15-30 FPS
 - **Memory**: <2GB VRAM for models
@@ -75,7 +75,7 @@ BATCH_SIZE = 1  # Real-time = batch of 1, but keep pipeline ready
 ### Ultra-Minimal Prompts for SmolVLM
 
 ```python
-# PRIMARY PROMPTS - Use these for Inerbee demo
+# PRIMARY PROMPTS - Use these for the demo
 PROMPTS = {
     "caption": "Describe in 10 words.",
     "detail": "What's happening?",
@@ -534,7 +534,7 @@ QUALITY_SETTINGS = {
 
 ### GUI Integration Patterns
 
-The Inerbee demo implements dynamic UI that changes based on Moondream's capabilities:
+The demo implements dynamic UI that changes based on Moondream's capabilities:
 
 ```javascript
 // Detect model capabilities

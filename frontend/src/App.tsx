@@ -9,9 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import { Toaster, toast } from 'sonner';
-import { 
-  Eye, 
-  Settings, 
+import {
+  Eye,
+  Settings,
   Zap,
   Monitor,
   Smartphone
@@ -39,7 +39,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [points, setPoints] = useState<Point[]>([]);
-  
+
   // Settings state
   const [settings, setSettings] = useState({
     serverUrl: 'http://localhost:8001',
@@ -49,7 +49,8 @@ export default function App() {
     captureInterval: 500, // milliseconds between frame captures
     autoReconnect: true,
     maxRetries: 5,
-    debugMode: false
+    debugMode: false,
+    responseLength: 'medium' as 'short' | 'medium' | 'long'
   });
 
   // WebSocket connection
@@ -266,32 +267,12 @@ export default function App() {
               </div>
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent drop-shadow-lg">
-                  AI Video Narration
+                  Vision AI Demo
                 </h1>
                 <p className="text-foreground/80 text-lg">Real-time video analysis with Vision-Language Models</p>
               </div>
             </div>
-            
-            <div className="flex items-center justify-center gap-3 flex-wrap">
-              <div className="glass px-4 py-2 rounded-full glass-hover">
-                <div className="flex items-center gap-2 text-sm">
-                  <Zap className="w-4 h-4 text-blue-300" />
-                  <span className="text-foreground/90">WebRTC Streaming</span>
-                </div>
-              </div>
-              <div className="glass px-4 py-2 rounded-full glass-hover">
-                <div className="flex items-center gap-2 text-sm">
-                  <Monitor className="w-4 h-4 text-cyan-300" />
-                  <span className="text-foreground/90">Real-time Processing</span>
-                </div>
-              </div>
-              <div className="glass px-4 py-2 rounded-full glass-hover">
-                <div className="flex items-center gap-2 text-sm">
-                  <Smartphone className="w-4 h-4 text-green-300" />
-                  <span className="text-foreground/90">Mobile Ready</span>
-                </div>
-              </div>
-            </div>
+
           </div>
 
           {/* Main Content */}
@@ -314,8 +295,9 @@ export default function App() {
                       ? 'point'
                       : 'none'
                   }
-                  backend="llamacpp"
+                  backend={selectedModel === 'moondream' ? 'transformers' : 'llamacpp'}
                   prompt={customQuery}
+                  responseLength={settings.responseLength}
                 />
               </div>
               

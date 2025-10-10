@@ -43,27 +43,15 @@ export function ConnectionStatus({
       <div>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-foreground/90">System Status</h2>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReconnect}
-              disabled={webSocketConnected && backendConnected}
-              className="flex items-center gap-1"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Reconnect
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onOpenSettings}
-              className="flex items-center gap-1"
-            >
-              <Settings className="w-3 h-3" />
-              Settings
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenSettings}
+            className="flex items-center gap-1"
+          >
+            <Settings className="w-3 h-3" />
+            Settings
+          </Button>
         </div>
 
         <div className="space-y-3">
@@ -117,12 +105,6 @@ export function ConnectionStatus({
               <span>Server URL:</span>
               <span className="font-mono text-blue-300">{serverUrl}</span>
             </div>
-            {lastHeartbeat && (
-              <div className="flex justify-between">
-                <span>Last Heartbeat:</span>
-                <span className="text-green-300">{new Date(lastHeartbeat).toLocaleTimeString()}</span>
-              </div>
-            )}
             <div className="flex justify-between">
               <span>Protocol:</span>
               <span className="text-cyan-300">WebRTC + WebSocket</span>

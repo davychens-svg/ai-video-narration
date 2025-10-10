@@ -1,5 +1,5 @@
 """
-High-Performance VLM Processor for Inerbee Demo
+High-Performance VLM Processor
 Optimized for speed with small models (SmolVLM, MobileVLM)
 Plus Moondream 3.0 with full feature set (caption, query, detect, point)
 """

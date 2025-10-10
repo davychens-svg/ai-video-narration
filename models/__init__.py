@@ -1,5 +1,5 @@
 """
-Inerbee VLM Models Package
+VLM Models Package
 """
 
 from .VLM import VLMProcessor, SmolVLM, MobileVLM

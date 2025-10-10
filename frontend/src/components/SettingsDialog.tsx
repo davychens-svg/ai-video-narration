@@ -26,6 +26,7 @@ interface SettingsDialogProps {
     autoReconnect: boolean;
     maxRetries: number;
     debugMode: boolean;
+    responseLength: 'short' | 'medium' | 'long';
   };
   onSettingsChange: (settings: any) => void;
 }
@@ -59,19 +60,59 @@ export function SettingsDialog({
             
             <div className="space-y-2">
               <Label>Video Quality</Label>
-              <Select 
-                value={settings.videoQuality} 
-                onValueChange={(value) => handleSettingChange('videoQuality', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low (480p)</SelectItem>
-                  <SelectItem value="medium">Medium (720p)</SelectItem>
-                  <SelectItem value="high">High (1080p)</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => handleSettingChange('videoQuality', 'low')}
+                  className={`flex-1 ${settings.videoQuality === 'low' ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm' : 'hover:bg-accent'}`}
+                >
+                  Low
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSettingChange('videoQuality', 'medium')}
+                  className={`flex-1 ${settings.videoQuality === 'medium' ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm' : 'hover:bg-accent'}`}
+                >
+                  Medium
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSettingChange('videoQuality', 'high')}
+                  className={`flex-1 ${settings.videoQuality === 'high' ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm' : 'hover:bg-accent'}`}
+                >
+                  High
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Response Length</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => handleSettingChange('responseLength', 'short')}
+                  className={`flex-1 ${settings.responseLength === 'short' ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm' : 'hover:bg-accent'}`}
+                >
+                  Short
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSettingChange('responseLength', 'medium')}
+                  className={`flex-1 ${settings.responseLength === 'medium' ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm' : 'hover:bg-accent'}`}
+                >
+                  Medium
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSettingChange('responseLength', 'long')}
+                  className={`flex-1 ${settings.responseLength === 'long' ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm' : 'hover:bg-accent'}`}
+                >
+                  Long
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Control how much detail the AI provides in its responses.
+              </div>
             </div>
 
             <div className="space-y-3">

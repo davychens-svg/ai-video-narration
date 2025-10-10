@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -29,6 +29,7 @@ interface VideoStreamingProps {
   overlayMode?: 'detection' | 'point' | 'none';
   backend?: 'transformers' | 'llamacpp';
   prompt?: string;
+  responseLength?: 'short' | 'medium' | 'long';
 }
 
 export function VideoStreaming({
@@ -41,7 +42,8 @@ export function VideoStreaming({
   points = [],
   overlayMode = 'none',
   backend = 'llamacpp',
-  prompt = 'What objects are visible in this scene?'
+  prompt = 'What objects are visible in this scene?',
+  responseLength = 'medium'
 }: VideoStreamingProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -92,7 +94,7 @@ export function VideoStreaming({
     }
   };
 
-  const setupHTTPFrameCapture = async () => {
+  const setupHTTPFrameCapture = useCallback(async () => {
     try {
       if (!videoRef.current || !canvasRef.current) {
         console.error('Video or canvas ref not available');
@@ -146,13 +148,15 @@ export function VideoStreaming({
             ? '/api/process_frame_llamacpp'
             : '/api/process_frame';
 
-          // Send to backend with prompt
+          // Send to backend with prompt and response length
           const response = await fetch(`${serverUrl}${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               image: imageData,
-              prompt: prompt
+              prompt: prompt,
+              custom_query: prompt,
+              response_length: responseLength
             })
           });
 
@@ -186,7 +190,7 @@ export function VideoStreaming({
     } catch (err) {
       console.error('Failed to set up frame capture:', err);
     }
-  };
+  }, [videoQuality, backend, serverUrl, prompt, responseLength, captureInterval]);
 
   const stopCameraStream = () => {
     // Stop frame capture interval
@@ -323,14 +327,15 @@ export function VideoStreaming({
   }, [activeTab]);
 
   useEffect(() => {
-    // Restart frame capture when captureInterval or prompt changes (only if already streaming)
+    // Restart frame capture when captureInterval, responseLength, or backend changes (only if already streaming)
+    // Note: prompt changes don't trigger restart - the latest prompt value is always used via closure
     if (isStreaming && frameIntervalRef.current) {
-      console.log(`Updating capture settings - interval: ${captureInterval}ms, prompt: "${prompt.substring(0, 30)}..."`);
+      console.log(`Updating capture settings - backend: ${backend}, interval: ${captureInterval}ms, responseLength: ${responseLength}`);
       clearInterval(frameIntervalRef.current);
       frameIntervalRef.current = null;
       setupHTTPFrameCapture();
     }
-  }, [captureInterval, prompt]);
+  }, [captureInterval, responseLength, backend, isStreaming, setupHTTPFrameCapture]);
 
   useEffect(() => {
     return () => {

@@ -81,11 +81,11 @@ export function ModelSelector({
           <Label>Select Model</Label>
           <div className="grid grid-cols-2 gap-3">
             <Button
-              variant={selectedModel === 'smolvlm' ? 'default' : 'outline'}
+              variant="outline"
               className={`h-auto py-4 px-4 ${
                 selectedModel === 'smolvlm'
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'hover:bg-accent hover:text-accent-foreground'
+                  ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm'
+                  : 'hover:bg-accent'
               }`}
               onClick={() => onModelChange('smolvlm')}
               disabled={isProcessing}
@@ -100,11 +100,11 @@ export function ModelSelector({
               </div>
             </Button>
             <Button
-              variant={selectedModel === 'moondream' ? 'default' : 'outline'}
+              variant="outline"
               className={`h-auto py-4 px-4 ${
                 selectedModel === 'moondream'
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'hover:bg-accent hover:text-accent-foreground'
+                  ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm'
+                  : 'hover:bg-accent'
               }`}
               onClick={() => onModelChange('moondream')}
               disabled={isProcessing}
@@ -196,11 +196,11 @@ export function ModelSelector({
                 {Object.entries(moondreamFeatureInfo).map(([key, info]) => (
                   <Button
                     key={key}
-                    variant={moondreamFeature === key ? 'default' : 'outline'}
+                    variant="outline"
                     className={`h-auto py-3 px-3 ${
                       moondreamFeature === key
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                        : 'hover:bg-accent hover:text-accent-foreground'
+                        ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm'
+                        : 'hover:bg-accent'
                     }`}
                     onClick={() => onMoondreamFeatureChange(key as MoondreamFeature)}
                     disabled={isProcessing}
@@ -294,20 +294,6 @@ export function ModelSelector({
             <span className="text-sm">Processing video frames...</span>
           </div>
         )}
-
-        {/* Hardware Info */}
-        <div className="glass p-4 rounded-2xl">
-          <div className="text-xs text-foreground/60 space-y-2">
-            <div className="flex justify-between">
-              <span>Platform Support:</span>
-              <span className="text-blue-300">macOS, Linux/Ubuntu</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Hardware:</span>
-              <span className="text-teal-300">Mac M-Chip, NVIDIA GPU</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
-# Inerbee Video Narrator - React Frontend
+# Vision AI Demo - React Frontend
 
-Modern, glassmorphic UI for real-time AI video narration powered by Vision-Language Models.
+Modern, glassmorphic UI for real-time video analysis powered by Vision-Language Models.
 
 ## Features
 
@@ -305,4 +305,3 @@ npm run dev
 
 ## License
 
-Part of the Inerbee Video Narrator project

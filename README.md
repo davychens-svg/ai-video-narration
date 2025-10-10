@@ -1,6 +1,6 @@
-# AI Video Narration System
+# Vision AI Demo
 
-Real-time video analysis and narration using Vision-Language Models (VLMs) with sub-second inference speed.
+Real-time video analysis with Vision-Language Models
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -287,20 +287,19 @@ sudo systemctl start inerbee-narrator
 
 ## Contributing
 
-This is a demo project for Inerbee. For issues or improvements:
+For issues or improvements:
 1. Check logs in `logs/server.log`
 2. Review `CONTEXT_ENGINEERING.md` for prompt optimization
 3. Test with different models and settings
 
 ## License
 
-MIT License - Built for Inerbee Demo
+MIT License
 
 ## Acknowledgments
 
 - HuggingFace for SmolVLM
 - FastAPI and aiortc communities
-- Inerbee team
 
 ---
 

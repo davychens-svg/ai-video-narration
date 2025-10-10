@@ -1,4 +1,4 @@
-# AI Video Narration - User Guide
+# Vision AI Demo - User Guide
 
 ## Quick Start
 

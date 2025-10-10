@@ -1,5 +1,5 @@
 """
-Inerbee Demo - Real-time Video Narrator Server
+Vision AI Demo - Real-time Video Analysis Server
 High-performance FastAPI server with WebRTC and WebSocket support
 """
 
@@ -45,7 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
-app = FastAPI(title="Inerbee Video Narrator")
+app = FastAPI(title="Vision AI Demo")
 
 # Add CORS middleware
 app.add_middleware(
@@ -188,7 +188,7 @@ async def startup_event():
     """Initialize VLM model on server startup"""
     global vlm_processor
 
-    logger.info("Starting Inerbee Demo Server...")
+    logger.info("Starting Vision AI Demo Server...")
     logger.info("Initializing VLM processor...")
 
     vlm_processor = VLMProcessor(model_name="smolvlm")
@@ -534,6 +534,29 @@ async def process_frame_llamacpp(params: dict):
         # Use prompt from request (frontend sends this)
         prompt = params.get("prompt") or "What objects are visible in this scene?"
 
+        # Get response length preference
+        response_length = params.get("response_length", "medium")
+        logger.info(f"Response length setting: {response_length}")
+
+        # Adjust max_tokens and enhance prompt based on response length
+        length_configs = {
+            "short": {
+                "max_tokens": 50,
+                "instruction": "Answer in 1-2 brief sentences only."
+            },
+            "medium": {
+                "max_tokens": 100,
+                "instruction": "Provide a balanced description in 2-3 sentences."
+            },
+            "long": {
+                "max_tokens": 200,
+                "instruction": "Provide a detailed description with comprehensive observations."
+            }
+        }
+
+        config = length_configs.get(response_length, length_configs["medium"])
+        enhanced_prompt = f"{config['instruction']} {prompt}"
+
         # Prepare llama-server request
         llama_request = {
             "model": "smolvlm",
@@ -549,12 +572,12 @@ async def process_frame_llamacpp(params: dict):
                         },
                         {
                             "type": "text",
-                            "text": prompt
+                            "text": enhanced_prompt
                         }
                     ]
                 }
             ],
-            "max_tokens": 150,
+            "max_tokens": config["max_tokens"],
             "temperature": 0.0,
             "stream": False,
             "stop": []  # Override default stop tokens to get complete responses
@@ -582,7 +605,7 @@ async def process_frame_llamacpp(params: dict):
         # Record performance
         perf_monitor.record(latency_ms)
 
-        logger.info(f"llama.cpp inference: {latency_ms:.1f}ms - Prompt: '{prompt[:50]}...' - {caption}")
+        logger.info(f"llama.cpp inference: {latency_ms:.1f}ms - Length: {response_length} ({config['max_tokens']} tokens) - Prompt: '{prompt[:30]}...' - {caption[:100]}...")
 
         return {
             "caption": caption,
