@@ -10,7 +10,7 @@ Real-time video analysis with Vision-Language Models
 
 - **Real-time Processing**: <100ms latency per frame (target: 50-70ms)
 - **WebRTC Streaming**: Direct browser-to-server video streaming, no app install needed
-- **Small Models**: Optimized for SmolVLM (500m params) and MobileVLM (1.4B params)
+- **Small Models**: Optimized for SmolVLM (500m params) and moondream (1.4B params)
 - **Live Captions**: Instant AI-generated narration via WebSocket broadcast
 - **Performance Monitoring**: Real-time FPS, latency, and P95 metrics
 - **Model Switching**: Hot-swap between models on the fly
