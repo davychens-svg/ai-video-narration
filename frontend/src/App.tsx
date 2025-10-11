@@ -96,6 +96,10 @@ export default function App() {
     };
   });
 
+  // Backend connection status and type detection
+  const [backendConnected, setBackendConnected] = useState(false);
+  const [backendType, setBackendType] = useState<'llamacpp' | 'transformers'>('transformers');
+
   // WebSocket connection
   const applySceneData = useCallback((payload: any) => {
     if (payload?.detections && Array.isArray(payload.detections)) {
@@ -139,11 +143,9 @@ export default function App() {
     setIsModelSwitching(currentModel !== selectedModel);
   }, [currentModel, selectedModel]);
 
-  const modelReady = currentModel === selectedModel && !isModelSwitching;
-
-  // Backend connection status and type detection
-  const [backendConnected, setBackendConnected] = useState(false);
-  const [backendType, setBackendType] = useState<'llamacpp' | 'transformers'>('transformers');
+  // For HTTP-based frame processing, we don't need to wait for WebSocket model state
+  // Model is ready once backend is connected
+  const modelReady = backendConnected;
 
   // Check backend connection and detect backend type
   useEffect(() => {
