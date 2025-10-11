@@ -4,6 +4,7 @@ import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Brain, Eye, Search, Target, Send, Check } from 'lucide-react';
+import { Language, getTranslations, FeatureKey } from '../lib/i18n';
 
 export type ModelType = 'smolvlm' | 'moondream';
 export type MoondreamFeature = 'query' | 'caption' | 'detection' | 'point' | 'mask';
@@ -19,6 +20,7 @@ interface ModelSelectorProps {
   onMoondreamSubmit?: () => void;
   isProcessing: boolean;
   responseLength: 'short' | 'medium' | 'long';
+  language: Language;
 }
 
 export function ModelSelector({
@@ -31,66 +33,68 @@ export function ModelSelector({
   onSendQuery,
   onMoondreamSubmit,
   isProcessing,
-  responseLength
+  responseLength,
+  language
 }: ModelSelectorProps) {
+  const t = getTranslations(language);
   const modelInfo = {
     smolvlm: {
-      name: 'SmolVLM',
-      description: 'Lightweight vision-language model optimized for speed and efficiency',
+      name: t.modelSmolVLM,
+      description: t.modelSmolVLMDesc,
       icon: <Brain className="w-4 h-4" />,
-      features: ['Fast inference', 'Low memory usage', 'Custom queries', 'General purpose captions']
+      features: t.modelSmolFeatures
     },
     moondream: {
-      name: 'Moondream',
-      description: 'Advanced vision model with multiple specialized capabilities',
+      name: t.modelMoondream,
+      description: t.modelMoondreamDesc,
       icon: <Eye className="w-4 h-4" />,
-      features: ['Custom queries', 'Object detection', 'Detailed captions', 'Point detection']
+      features: t.modelMoondreamFeatures
     }
   };
 
-  const moondreamFeatureInfo = {
+  const moondreamFeatureInfo: Record<FeatureKey, { name: string; description: string; icon: JSX.Element }> = {
     query: {
-      name: 'Custom Query',
-      description: 'Ask specific questions about the video content',
+      name: t.moondreamFeatureNames.query,
+      description: t.moondreamFeatureDescriptions.query,
       icon: <Search className="w-4 h-4" />
     },
     caption: {
-      name: 'Auto Caption',
-      description: 'Generate descriptive captions automatically',
+      name: t.moondreamFeatureNames.caption,
+      description: t.moondreamFeatureDescriptions.caption,
       icon: <Eye className="w-4 h-4" />
     },
     detection: {
-      name: 'Object Detection',
-      description: 'Identify and locate objects in the video',
+      name: t.moondreamFeatureNames.detection,
+      description: t.moondreamFeatureDescriptions.detection,
       icon: <Target className="w-4 h-4" />
     },
     point: {
-      name: 'Point Detection',
-      description: 'Detect specific points and coordinates',
+      name: t.moondreamFeatureNames.point,
+      description: t.moondreamFeatureDescriptions.point,
       icon: <Target className="w-4 h-4" />
     },
     mask: {
-      name: 'Privacy Mask',
-      description: 'Hide/blur detected objects for privacy',
+      name: t.moondreamFeatureNames.mask,
+      description: t.moondreamFeatureDescriptions.mask,
       icon: <Eye className="w-4 h-4" />
     }
   };
 
   const responseLengthLabels: Record<'short' | 'medium' | 'long', string> = {
-    short: 'Short',
-    medium: 'Medium',
-    long: 'Long'
+    short: t.responseLengthShort,
+    medium: t.responseLengthMedium,
+    long: t.responseLengthLong
   };
 
   return (
     <div className="w-full p-6">
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-foreground/90">AI Model Configuration</h2>
+        <h2 className="text-xl font-semibold text-foreground/90">{t.modelSectionTitle}</h2>
       </div>
       <div className="space-y-6">
         {/* Model Selection */}
         <div className="space-y-2">
-          <Label>Select Model</Label>
+          <Label>{t.modelSelectLabel}</Label>
           <div className="grid grid-cols-2 gap-3">
             <Button
               variant="outline"
@@ -105,8 +109,8 @@ export function ModelSelector({
               <div className="flex items-center gap-2 w-full">
                 {modelInfo.smolvlm.icon}
                 <div className="flex flex-col items-start flex-1">
-                  <span className="font-semibold text-sm">SmolVLM</span>
-                  <span className="text-xs opacity-80">Fast & Efficient</span>
+                  <span className="font-semibold text-sm">{modelInfo.smolvlm.name}</span>
+                  <span className="text-xs opacity-80">{t.modelSmolTagline}</span>
                 </div>
                 {selectedModel === 'smolvlm' && <Check className="w-5 h-5" />}
               </div>
@@ -124,8 +128,8 @@ export function ModelSelector({
               <div className="flex items-center gap-2 w-full">
                 {modelInfo.moondream.icon}
                 <div className="flex flex-col items-start flex-1">
-                  <span className="font-semibold text-sm">Moondream</span>
-                  <span className="text-xs opacity-80">Advanced Features</span>
+                  <span className="font-semibold text-sm">{modelInfo.moondream.name}</span>
+                  <span className="text-xs opacity-80">{t.modelMoondreamTagline}</span>
                 </div>
                 {selectedModel === 'moondream' && <Check className="w-5 h-5" />}
               </div>
@@ -158,17 +162,19 @@ export function ModelSelector({
             <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
               <p className="text-xs text-green-400 flex items-center gap-2">
                 <Check className="w-4 h-4" />
-                <span className="font-medium">Real-time inference enabled</span>
-                <span className="opacity-70">· llama.cpp GGUF · &lt;1s response</span>
+                <span className="font-medium">{t.smolRealtimeTitle}</span>
+                <span className="opacity-70">{t.smolRealtimeSubtitle}</span>
               </p>
             </div>
 
             {/* Prompt */}
             <div className="space-y-2">
-              <Label htmlFor="smolvlm-prompt">Prompt <span className="text-red-500">*</span></Label>
+              <Label htmlFor="smolvlm-prompt">
+                {t.smolPromptLabel} <span className="text-red-500">*</span>
+              </Label>
               <Textarea
                 id="smolvlm-prompt"
-                placeholder="Enter your prompt for the video analysis. e.g., 'What objects are visible in this scene?', 'Describe what you see', 'What colors are present?'"
+                placeholder={t.smolPromptPlaceholder}
                 value={customQuery}
                 onChange={(e) => onCustomQueryChange(e.target.value)}
                 onFocus={(e) => e.target.select()}
@@ -184,7 +190,7 @@ export function ModelSelector({
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
                   <Check className="w-3 h-3" />
-                  Prompt will be sent with each video frame
+                  {t.smolPromptHint}
                 </p>
                 <Button
                   size="sm"
@@ -193,7 +199,7 @@ export function ModelSelector({
                   className="flex items-center gap-2 shrink-0"
                 >
                   <Send className="w-3 h-3" />
-                  Update
+                  {t.actionUpdate}
                 </Button>
               </div>
             </div>
@@ -204,7 +210,7 @@ export function ModelSelector({
         {selectedModel === 'moondream' && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Moondream Feature</Label>
+              <Label>{t.moondreamFeatureLabel}</Label>
               <div className="grid grid-cols-2 gap-2">
                 {Object.entries(moondreamFeatureInfo).map(([key, info]) => (
                   <Button
@@ -243,7 +249,7 @@ export function ModelSelector({
 
             {moondreamFeature === 'caption' && (
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Response length preference</span>
+                <span>{t.responseLengthPreference}</span>
                 <Badge variant="outline" className="uppercase tracking-wide">
                   {responseLengthLabels[responseLength]}
                 </Badge>
@@ -253,10 +259,10 @@ export function ModelSelector({
             {/* Custom Query Input */}
             {moondreamFeature === 'query' && (
               <div className="space-y-2">
-                <Label htmlFor="custom-query">Custom Query</Label>
+                <Label htmlFor="custom-query">{t.customQuery}</Label>
                 <Textarea
                   id="custom-query"
-                  placeholder="What would you like to know about the video? e.g., 'What objects are visible in the scene?'"
+                  placeholder={t.customQueryPlaceholder}
                   value={customQuery}
                   onChange={(e) => onCustomQueryChange(e.target.value)}
                   onFocus={(e) => e.target.select()}
@@ -272,7 +278,7 @@ export function ModelSelector({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
                     <Check className="w-3 h-3" />
-                    Use the update button to send your question to Moondream
+                    {t.queryInstruction}
                   </p>
                   <Button
                     size="sm"
@@ -281,7 +287,7 @@ export function ModelSelector({
                     className="flex items-center gap-2 shrink-0"
                   >
                     <Send className="w-3 h-3" />
-                    Update
+                    {t.actionUpdate}
                   </Button>
                 </div>
               </div>
@@ -290,10 +296,10 @@ export function ModelSelector({
             {/* Object Detection Input */}
             {moondreamFeature === 'detection' && (
               <div className="space-y-2">
-                <Label htmlFor="detect-object">Object to Detect</Label>
+                <Label htmlFor="detect-object">{t.moondreamFeatureNames.detection}</Label>
                 <Input
                   id="detect-object"
-                  placeholder="e.g., 'person', 'car', 'book', or leave empty for all objects"
+                  placeholder={t.detectionPlaceholder}
                   value={customQuery}
                   onChange={(e) => onCustomQueryChange(e.target.value)}
                   onFocus={(e) => e.target.select()}
@@ -309,7 +315,7 @@ export function ModelSelector({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
                     <Check className="w-3 h-3" />
-                    Enter one or more comma-separated objects (e.g. "person, car") to highlight them in blue boxes
+                    {t.detectionInstruction}
                   </p>
                   <Button
                     size="sm"
@@ -318,7 +324,7 @@ export function ModelSelector({
                     className="flex items-center gap-2 shrink-0"
                   >
                     <Send className="w-3 h-3" />
-                    Update
+                    {t.actionUpdate}
                   </Button>
                 </div>
               </div>
@@ -327,10 +333,10 @@ export function ModelSelector({
             {/* Point Detection Input */}
             {moondreamFeature === 'point' && (
               <div className="space-y-2">
-                <Label htmlFor="point-object">Object to Locate</Label>
+                <Label htmlFor="point-object">{t.moondreamFeatureNames.point}</Label>
                 <Input
                   id="point-object"
-                  placeholder="e.g., 'person', 'face', 'hand'"
+                  placeholder={t.pointInstruction}
                   value={customQuery}
                   onChange={(e) => onCustomQueryChange(e.target.value)}
                   onFocus={(e) => e.target.select()}
@@ -346,7 +352,7 @@ export function ModelSelector({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
                     <Check className="w-3 h-3" />
-                    Use a precise label (e.g. "person") to drop a pointer directly on the video stream
+                    {t.pointInstruction}
                   </p>
                   <Button
                     size="sm"
@@ -355,7 +361,7 @@ export function ModelSelector({
                     className="flex items-center gap-2 shrink-0"
                   >
                     <Send className="w-3 h-3" />
-                    Update
+                    {t.actionUpdate}
                   </Button>
                 </div>
               </div>
@@ -364,10 +370,10 @@ export function ModelSelector({
             {/* Privacy Mask Input */}
             {moondreamFeature === 'mask' && (
               <div className="space-y-2">
-                <Label htmlFor="mask-object">Object to Mask</Label>
+                <Label htmlFor="mask-object">{t.moondreamFeatureNames.mask}</Label>
                 <Input
                   id="mask-object"
-                  placeholder="e.g., 'face', 'person', 'license plate', 'screen'"
+                  placeholder={t.maskInstruction}
                   value={customQuery}
                   onChange={(e) => onCustomQueryChange(e.target.value)}
                   onFocus={(e) => e.target.select()}
@@ -383,7 +389,7 @@ export function ModelSelector({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
                     <Check className="w-3 h-3" />
-                    Detected objects will be hidden/blurred for privacy
+                    {t.maskInstruction}
                   </p>
                   <Button
                     size="sm"
@@ -392,7 +398,7 @@ export function ModelSelector({
                     className="flex items-center gap-2 shrink-0"
                   >
                     <Send className="w-3 h-3" />
-                    Update
+                    {t.actionUpdate}
                   </Button>
                 </div>
               </div>
@@ -404,7 +410,7 @@ export function ModelSelector({
         {isProcessing && (
           <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg">
             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm">Processing video frames...</span>
+            <span className="text-sm">{t.processingFrames}</span>
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { useRef, useEffect, type RefObject } from 'react';
+import { Language, getTranslations } from '../lib/i18n';
 
 interface Detection {
   bbox: [number, number, number, number]; // [x1, y1, x2, y2]
@@ -17,9 +18,11 @@ interface VideoOverlayProps {
   detections?: Detection[];
   points?: Point[];
   mode?: 'detection' | 'point' | 'mask' | 'none';
+  language: Language;
 }
 
-export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'none' }: VideoOverlayProps) {
+export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'none', language }: VideoOverlayProps) {
+  const t = getTranslations(language);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -141,7 +144,7 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
         ctx.strokeRect(x1, y1, width, height);
 
         ctx.fillStyle = '#FF0000';
-        const labelText = 'MASKED';
+        const labelText = t.maskOverlayLabel;
         const textMetrics = ctx.measureText(labelText);
         ctx.fillRect(x1, y1 - 20, textMetrics.width + 10, 20);
 
@@ -244,7 +247,7 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
             ctx.strokeRect(x1, y1, width, height);
 
             ctx.fillStyle = '#FF0000';
-            const labelText = 'MASKED';
+            const labelText = t.maskOverlayLabel;
             const textMetrics = ctx.measureText(labelText);
             ctx.fillRect(x1, y1 - 20, textMetrics.width + 10, 20);
 

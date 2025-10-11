@@ -1,10 +1,11 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Play, Square, Camera, Youtube } from 'lucide-react';
 import { VideoOverlay } from './VideoOverlay';
+import { Language, getTranslations } from '../lib/i18n';
 
 interface Detection {
   bbox: [number, number, number, number];
@@ -31,6 +32,7 @@ interface VideoStreamingProps {
   prompt?: string;
   responseLength?: 'short' | 'medium' | 'long';
   modelReady?: boolean;
+  language: Language;
 }
 
 export function VideoStreaming({
@@ -45,8 +47,10 @@ export function VideoStreaming({
   backend = 'llamacpp',
   prompt = 'What objects are visible in this scene?',
   responseLength = 'medium',
-  modelReady = true
+  modelReady = true,
+  language
 }: VideoStreamingProps) {
+  const t = useMemo(() => getTranslations(language), [language]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameIntervalRef = useRef<number | null>(null);
@@ -91,7 +95,7 @@ export function VideoStreaming({
       // Start HTTP-based frame capture
       await setupHTTPFrameCapture();
     } catch (err) {
-      setError('Failed to access camera. Please ensure camera permissions are granted.');
+      setError(t.errorCameraAccess);
       console.error('Camera error:', err);
     }
   };
@@ -196,7 +200,7 @@ export function VideoStreaming({
     } catch (err) {
       console.error('Failed to set up frame capture:', err);
     }
-  }, [videoQuality, backend, serverUrl, prompt, responseLength, captureInterval, modelReady]);
+  }, [videoQuality, backend, serverUrl, prompt, responseLength, captureInterval, modelReady, language, t]);
 
   const stopCameraStream = () => {
     // Stop frame capture interval
@@ -222,7 +226,7 @@ export function VideoStreaming({
       setUploadedFile(file);
       setYoutubeUrl(''); // Clear URL if file is selected
     } else {
-      setError('Please select a valid video file');
+      setError(t.errorInvalidVideo);
     }
   };
 
@@ -232,7 +236,7 @@ export function VideoStreaming({
 
       if (!videoRef.current) {
         console.error('Video ref not available');
-        setError('Video element not ready. Please try again.');
+        setError(t.errorVideoNotReady);
         return;
       }
 
@@ -248,7 +252,7 @@ export function VideoStreaming({
 
         if (videoId) {
           // It's a YouTube URL - we can't directly access it due to CORS
-          setError('YouTube URLs are not directly supported due to CORS restrictions. Please upload a video file or use a direct video URL (MP4, WebM).');
+          setError(t.errorYouTubeCors);
           return;
         } else {
           // Assume it's a direct video URL
@@ -256,7 +260,7 @@ export function VideoStreaming({
           console.log('Using video URL:', videoSrc);
         }
       } else {
-        setError('Please provide a video URL or upload a video file');
+        setError(t.errorVideoRequired);
         return;
       }
 
@@ -288,11 +292,11 @@ export function VideoStreaming({
       videoRef.current.onerror = (e) => {
         console.error('Video load error event:', e);
         console.error('Video error details:', videoRef.current?.error);
-        setError('Failed to load video. This usually means: 1) Invalid URL, 2) CORS restrictions, or 3) Unsupported format. Try using the sample videos or upload a local file instead.');
+        setError(t.errorVideoLoad);
         setIsStreaming(false);
       };
     } catch (err) {
-      setError('Failed to load video.');
+      setError(t.errorVideoLoadGeneric);
       console.error('Video load exception:', err);
     }
   };
@@ -355,7 +359,7 @@ export function VideoStreaming({
     <div className="w-full p-6">
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
-          <h2 className="text-xl font-semibold text-foreground/90">Video Input</h2>
+          <h2 className="text-xl font-semibold text-foreground/90">{t.videoInputTitle}</h2>
           <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-400 glow-green' : 'bg-red-400'} transition-all duration-300`} />
         </div>
       </div>
@@ -364,11 +368,11 @@ export function VideoStreaming({
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="camera" className="flex items-center gap-2">
               <Camera className="w-4 h-4" />
-              Live Camera
+              {t.tabCamera}
             </TabsTrigger>
             <TabsTrigger value="youtube" className="flex items-center gap-2">
               <Youtube className="w-4 h-4" />
-              Video File/URL
+              {t.tabVideo}
             </TabsTrigger>
           </TabsList>
 
@@ -386,6 +390,7 @@ export function VideoStreaming({
                 detections={detections}
                 points={points}
                 mode={overlayMode}
+                language={language}
               />
             </div>
 
@@ -396,12 +401,12 @@ export function VideoStreaming({
               {!isStreaming ? (
                 <Button onClick={startCameraStream} className="flex items-center gap-2">
                   <Play className="w-4 h-4" />
-                  Start Camera
+                  {t.buttonStartCamera}
                 </Button>
               ) : (
                 <Button onClick={stopCameraStream} variant="destructive" className="flex items-center gap-2">
                   <Square className="w-4 h-4" />
-                  Stop Camera
+                  {t.buttonStopCamera}
                 </Button>
               )}
             </div>
@@ -410,11 +415,11 @@ export function VideoStreaming({
           <TabsContent value="youtube" className="space-y-4">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="youtube-url" className="text-foreground">Video URL</Label>
+                <Label htmlFor="youtube-url" className="text-foreground">{t.videoUrlLabel}</Label>
                 <Input
                   id="youtube-url"
                   type="text"
-                  placeholder="Paste video URL or try sample videos below"
+                  placeholder={t.videoUrlPlaceholder}
                   value={youtubeUrl}
                   onChange={(e) => {
                     setYoutubeUrl(e.target.value);
@@ -435,7 +440,7 @@ export function VideoStreaming({
                     }}
                     className="text-xs text-blue-300 hover:text-blue-200"
                   >
-                    Sample Video 1
+                    {t.sampleVideo1}
                   </Button>
                   <Button
                     type="button"
@@ -448,19 +453,19 @@ export function VideoStreaming({
                     }}
                     className="text-xs text-blue-300 hover:text-blue-200"
                   >
-                    Sample Video 2
+                    {t.sampleVideo2}
                   </Button>
                 </div>
               </div>
 
               <div className="flex items-center gap-4">
                 <div className="flex-1 border-t border-white/10"></div>
-                <span className="text-xs text-foreground/60">OR</span>
+                <span className="text-xs text-foreground/60">{t.orDividerText}</span>
                 <div className="flex-1 border-t border-white/10"></div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="video-file" className="text-foreground">Upload Video File</Label>
+                <Label htmlFor="video-file" className="text-foreground">{t.uploadVideoLabel}</Label>
                 <input
                   ref={fileInputRef}
                   id="video-file"
@@ -475,7 +480,7 @@ export function VideoStreaming({
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full border-white/20 hover:bg-white/10"
                 >
-                  {uploadedFile ? uploadedFile.name : 'Choose Video File'}
+                  {uploadedFile ? uploadedFile.name : t.chooseVideoFile}
                 </Button>
                 {uploadedFile && (
                   <Button
@@ -490,20 +495,19 @@ export function VideoStreaming({
                     }}
                     className="w-full text-red-300 hover:text-red-200"
                   >
-                    Clear File
+                    {t.clearFile}
                   </Button>
                 )}
               </div>
 
               <div className="p-3 glass rounded-xl border border-blue-300/20">
                 <p className="text-xs text-foreground/80 mb-2">
-                  <strong>💡 Tips:</strong>
+                  <strong>{t.tipsTitle}</strong>
                 </p>
                 <ul className="text-xs text-foreground/70 space-y-1 list-disc list-inside">
-                  <li>Use the sample videos above for quick testing</li>
-                  <li>Upload local files (MP4, WebM, OGG) for best results</li>
-                  <li>Most websites block video embedding due to CORS - upload instead</li>
-                  <li>For YouTube: download the video first, then upload it</li>
+                  {t.tipsList.map((tip) => (
+                    <li key={tip}>{tip}</li>
+                  ))}
                 </ul>
               </div>
             </div>
@@ -526,12 +530,13 @@ export function VideoStreaming({
                     detections={detections}
                     points={points}
                     mode={overlayMode}
+                    language={language}
                   />
                 </>
               )}
-              {!isStreaming && (
+             {!isStreaming && (
                 <div className="absolute inset-0 flex items-center justify-center text-foreground/60 bg-black/20">
-                  Video will appear here
+                  {t.videoPlaceholder}
                 </div>
               )}
             </div>
@@ -543,12 +548,12 @@ export function VideoStreaming({
               {!isStreaming ? (
                 <Button onClick={startYouTubeStream} className="flex items-center gap-2" disabled={!youtubeUrl && !uploadedFile}>
                   <Play className="w-4 h-4" />
-                  Load Video
+                  {t.buttonLoadVideo}
                 </Button>
               ) : (
                 <Button onClick={stopYouTubeStream} variant="destructive" className="flex items-center gap-2">
                   <Square className="w-4 h-4" />
-                  Stop Video
+                  {t.buttonStopVideo}
                 </Button>
               )}
             </div>

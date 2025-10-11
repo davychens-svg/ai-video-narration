@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { VideoStreaming } from './components/VideoStreaming';
 import { ModelSelector, ModelType, MoondreamFeature } from './components/ModelSelector';
 import { CaptionDisplay } from './components/CaptionDisplay';
@@ -7,6 +7,8 @@ import { SettingsDialog } from './components/SettingsDialog';
 import { useWebSocket } from './hooks/useWebSocket';
 import { Toaster, toast } from 'sonner';
 import { Eye } from 'lucide-react';
+import { LanguageToggle } from './components/LanguageToggle';
+import { Language, getTranslations } from './lib/i18n';
 
 interface Detection {
   bbox: [number, number, number, number];
@@ -21,6 +23,8 @@ interface Point {
 }
 
 export default function App() {
+  const [language, setLanguage] = useState<Language>('en');
+  const translations = getTranslations(language);
   const resolveDefaultConnections = () => {
     const envServerUrl = import.meta.env.VITE_SERVER_URL as string | undefined;
     const envWebsocketUrl = import.meta.env.VITE_WS_URL as string | undefined;
@@ -59,12 +63,21 @@ export default function App() {
   // Application state
   const [selectedModel, setSelectedModel] = useState<ModelType>('smolvlm');
   const [moondreamFeature, setMoondreamFeature] = useState<MoondreamFeature>('caption');
-  const [customQuery, setCustomQuery] = useState('What objects are visible in this scene?');
+  const [customQuery, setCustomQuery] = useState(translations.defaultPrompt);
   const [isModelSwitching, setIsModelSwitching] = useState(false);
   const [videoStreamActive, setVideoStreamActive] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [points, setPoints] = useState<Point[]>([]);
+  const defaultPromptRef = useRef(translations.defaultPrompt);
+
+  useEffect(() => {
+    const newPrompt = getTranslations(language).defaultPrompt;
+    if (customQuery === defaultPromptRef.current) {
+      setCustomQuery(newPrompt);
+    }
+    defaultPromptRef.current = newPrompt;
+  }, [language]);
 
   // Settings state
   const [settings, setSettings] = useState(() => {
@@ -190,7 +203,7 @@ export default function App() {
     setVideoStreamActive(!!stream);
     
     if (stream) {
-      toast.success('Video stream started successfully');
+      toast.success(translations.toastStreamStarted);
 
       if (currentModel !== selectedModel) {
         sendMessage({
@@ -211,7 +224,7 @@ export default function App() {
         framerate: settings.framerate
       });
     } else {
-      toast.info('Video stream stopped');
+      toast.info(translations.toastStreamStopped);
     }
   };
 
@@ -247,7 +260,8 @@ export default function App() {
     );
 
     if (videoStreamActive) {
-      toast.info(`Switching to ${model === 'smolvlm' ? 'SmolVLM' : 'Moondream'} model...`);
+      const modelLabel = model === 'smolvlm' ? translations.modelSmolVLM : translations.modelMoondream;
+      toast.info(translations.toastModelSwitching.replace('{model}', modelLabel));
     }
   };
 
@@ -261,7 +275,8 @@ export default function App() {
           : normalizeQuery(customQuery);
 
       pushConfiguration('moondream', feature, queryValue);
-      toast.info(`Switched to ${feature} feature`);
+      const featureLabel = translations.moondreamFeatureNames[feature];
+      toast.info(translations.toastFeatureSwitched.replace('{feature}', featureLabel));
     }
   };
 
@@ -273,15 +288,16 @@ export default function App() {
     const trimmedQuery = normalizeQuery(customQuery);
     if (!trimmedQuery || !videoStreamActive) return;
 
+    const modelLabel = selectedModel === 'smolvlm' ? translations.modelSmolVLM : translations.modelMoondream;
     const success = pushConfiguration(
       selectedModel,
       selectedModel === 'moondream' ? moondreamFeature : null,
       trimmedQuery,
-      'Query sent to SmolVLM'
+      translations.toastQuerySent.replace('{model}', modelLabel)
     );
 
     if (!success) {
-      toast.error('Unable to send query – WebSocket not connected');
+      toast.error(translations.toastWsError);
     }
   };
 
@@ -292,10 +308,10 @@ export default function App() {
 
     const feature = moondreamFeature;
     const queryValue = feature === 'caption' ? null : normalizeQuery(customQuery);
-    const sent = pushConfiguration('moondream', feature, queryValue, 'Moondream settings updated');
+    const sent = pushConfiguration('moondream', feature, queryValue, translations.toastMoondreamUpdated);
 
     if (!sent) {
-      toast.error('Unable to update Moondream settings – WebSocket not connected');
+      toast.error(translations.toastWsError);
     }
   };
 
@@ -349,12 +365,14 @@ export default function App() {
               </div>
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent drop-shadow-lg">
-                  Vision AI Demo
+                  {translations.title}
                 </h1>
-                <p className="text-foreground/80 text-lg">Real-time video analysis with Vision-Language Models</p>
+                <p className="text-foreground/80 text-lg">{translations.subtitle}</p>
               </div>
             </div>
-
+            <div className="flex justify-center">
+              <LanguageToggle language={language} onLanguageChange={setLanguage} />
+            </div>
           </div>
 
           {/* Main Content */}
@@ -383,6 +401,7 @@ export default function App() {
                   prompt={customQuery}
                   modelReady={modelReady}
                   responseLength={settings.responseLength}
+                  language={language}
                 />
               </div>
               
@@ -428,75 +447,45 @@ export default function App() {
           {/* Architecture Info */}
           <div className="glass-card rounded-3xl p-8 glass-hover">
             <h2 className="text-2xl font-semibold mb-6 text-center bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
-              System Architecture
+              {translations.architectureTitle}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="space-y-4">
                 <div className="glass p-4 rounded-2xl">
-                  <h4 className="font-semibold text-lg mb-3 text-blue-200">Frontend (React)</h4>
+                  <h4 className="font-semibold text-lg mb-3 text-blue-200">{translations.architectureFrontendTitle}</h4>
                   <ul className="space-y-2 text-sm text-foreground/80">
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
-                      WebRTC camera capture
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
-                      YouTube video integration
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
-                      Real-time WebSocket
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
-                      Model configuration
-                    </li>
+                    {translations.architectureFrontendItems.map((item) => (
+                      <li key={item} className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
+                        {item}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
               <div className="space-y-4">
                 <div className="glass p-4 rounded-2xl">
-                  <h4 className="font-semibold text-lg mb-3 text-cyan-200">Backend (FastAPI)</h4>
+                  <h4 className="font-semibold text-lg mb-3 text-cyan-200">{translations.architectureBackendTitle}</h4>
                   <ul className="space-y-2 text-sm text-foreground/80">
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
-                      Video frame processing
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
-                      WebRTC handshake
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
-                      WebSocket broadcasting
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
-                      Model inference
-                    </li>
+                    {translations.architectureBackendItems.map((item) => (
+                      <li key={item} className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
+                        {item}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
               <div className="space-y-4">
                 <div className="glass p-4 rounded-2xl">
-                  <h4 className="font-semibold text-lg mb-3 text-green-200">AI Models</h4>
+                  <h4 className="font-semibold text-lg mb-3 text-green-200">{translations.architectureModelsTitle}</h4>
                   <ul className="space-y-2 text-sm text-foreground/80">
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
-                      SmolVLM (fast, efficient)
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
-                      Moondream (advanced)
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
-                      Mac M-Chip & NVIDIA GPU
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
-                      Real-time inference
-                    </li>
+                    {translations.architectureModelsItems.map((item) => (
+                      <li key={item} className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
+                        {item}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
@@ -511,6 +500,7 @@ export default function App() {
         onOpenChange={setSettingsOpen}
         settings={settings}
         onSettingsChange={setSettings}
+        language={language}
       />
 
       {/* Toast Notifications */}
