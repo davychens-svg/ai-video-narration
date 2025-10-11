@@ -9,9 +9,10 @@ import io
 import json
 import logging
 import time
+from datetime import datetime
 from collections import deque
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 
 import cv2
 import numpy as np
@@ -33,6 +34,8 @@ from models.VLM import VLMProcessor
 import os
 log_dir = Path(__file__).parent.parent / "logs"
 log_dir.mkdir(exist_ok=True)
+qwen_capture_dir = log_dir / "qwen_captures"
+qwen_capture_dir.mkdir(exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -115,6 +118,44 @@ class PerformanceMonitor:
         }
 
 perf_monitor = PerformanceMonitor()
+
+
+async def log_qwen_capture(
+    image: Image.Image,
+    prompt: Optional[str],
+    response_text: Optional[str],
+    mode: str,
+    language: str,
+    latency_ms: float
+) -> None:
+    """Persist Qwen request/response data for offline testing."""
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+    image_path = qwen_capture_dir / f"{timestamp}.jpg"
+    meta_path = qwen_capture_dir / f"{timestamp}.json"
+    prompt_text = prompt or ""
+    response_value = response_text or ""
+
+    def _write():
+        try:
+            image.convert("RGB").save(image_path, format="JPEG", quality=90)
+        except Exception as exc:
+            logger.error(f"Failed to save Qwen capture image: {exc}")
+        metadata = {
+            "timestamp": timestamp,
+            "mode": mode,
+            "language": language,
+            "latency_ms": round(latency_ms, 2),
+            "prompt": prompt_text,
+            "response": response_value,
+        }
+        try:
+            with meta_path.open("w", encoding="utf-8") as meta_file:
+                json.dump(metadata, meta_file, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            logger.error(f"Failed to save Qwen capture metadata: {exc}")
+
+    # Write files without blocking the main event loop
+    await asyncio.to_thread(_write)
 
 # Frame processor with smart skipping
 class FrameProcessor:
@@ -627,6 +668,22 @@ async def process_frame(params: dict):
             response_length=response_length_setting
         )
         latency_ms = (time.time() - start_time) * 1000
+
+        if vlm_processor and vlm_processor.current_model_name == "qwen2vl":
+            caption_text = result.get("caption") or result.get("response")
+            try:
+                asyncio.create_task(
+                    log_qwen_capture(
+                        image.copy(),
+                        effective_user_input,
+                        caption_text,
+                        effective_mode,
+                        language,
+                        latency_ms
+                    )
+                )
+            except Exception as exc:
+                logger.error(f"Failed to schedule Qwen capture logging: {exc}")
 
         # Record performance
         perf_monitor.record(latency_ms)
