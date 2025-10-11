@@ -144,7 +144,6 @@ source venv/bin/activate
 ### 5.2 Install Python Dependencies
 
 ```bash
-cd server
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
