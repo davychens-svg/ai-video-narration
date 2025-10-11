@@ -429,6 +429,7 @@ export default function App() {
                   onMoondreamSubmit={handleSendMoondreamSettings}
                   isProcessing={isModelSwitching}
                   responseLength={settings.responseLength}
+                  language={language}
                 />
               </div>
             </div>
@@ -442,6 +443,7 @@ export default function App() {
                   videoStreamActive={videoStreamActive}
                   onOpenSettings={handleOpenSettings}
                   serverUrl={settings.serverUrl}
+                  language={language}
                 />
               </div>
               
@@ -451,6 +453,7 @@ export default function App() {
                   isConnected={wsConnected}
                   onClearCaptions={clearCaptions}
                   onExportCaptions={exportCaptions}
+                  language={language}
                 />
               </div>
             </div>
