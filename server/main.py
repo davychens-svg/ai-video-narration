@@ -79,6 +79,7 @@ active_connections: Set[WebSocket] = set()
 frame_queue = asyncio.Queue(maxsize=2)  # Small queue to process latest frames only
 pcs: Set[RTCPeerConnection] = set()
 relay = MediaRelay()
+QUESTION_WORDS = ("what", "who", "where", "when", "why", "how", "which")
 
 # Processing mode and user input state
 current_mode = "caption"  # caption, query, detect, point
@@ -575,6 +576,43 @@ async def process_frame(params: dict):
             if normalized_length in {"short", "medium", "long"}:
                 response_length_setting = normalized_length
 
+        # Determine explicit mode if provided in request
+        requested_mode = params.get("mode")
+        if isinstance(requested_mode, str):
+            requested_mode = requested_mode.lower().strip()
+        else:
+            requested_mode = None
+
+        effective_mode = current_mode
+        if requested_mode in {"caption", "query", "detection", "point", "mask"}:
+            effective_mode = requested_mode
+
+        # Extract custom query/prompt from request payload
+        request_query = params.get("custom_query")
+        if not isinstance(request_query, str) or not request_query.strip():
+            request_query = params.get("prompt")
+
+        if isinstance(request_query, str):
+            request_query = request_query.strip()
+            if not request_query:
+                request_query = None
+        else:
+            request_query = None
+
+        effective_user_input = request_query or user_query_input or detect_object_input
+
+        # Auto-detect question usage for Qwen2-VL to switch into query mode
+        if (
+            vlm_processor
+            and vlm_processor.current_model_name == "qwen2vl"
+            and effective_user_input
+            and effective_mode not in {"query", "detection", "point", "mask"}
+        ):
+            lowered = effective_user_input.lower()
+            if lowered.endswith("?") or any(lowered.startswith(word) for word in QUESTION_WORDS):
+                logger.debug("Auto-switching Qwen2-VL to query mode for prompt: %s", effective_user_input[:100])
+                effective_mode = "query"
+
         # Get language from request (default: en)
         language = params.get("language", "en")
         if vlm_processor:
@@ -584,8 +622,8 @@ async def process_frame(params: dict):
         start_time = time.time()
         result = await vlm_processor.process_frame(
             frame,
-            mode=current_mode,
-            user_input=user_query_input or detect_object_input,
+            mode=effective_mode,
+            user_input=effective_user_input,
             response_length=response_length_setting
         )
         latency_ms = (time.time() - start_time) * 1000
