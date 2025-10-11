@@ -120,12 +120,14 @@ class SmolVLM(VLMModel):
             raise
 
     @torch.inference_mode()
-    def caption(self, image: Image.Image, prompt: str = "Describe briefly.") -> str:
+    def caption(self, image: Image.Image, prompt: str = "Describe briefly.", max_new_tokens: int = 10) -> str:
         """Generate caption with ultra-fast settings"""
         if not self.is_ready:
             raise RuntimeError("Model not loaded")
 
         try:
+            target_tokens = int(max(4, min(max_new_tokens, 128)))
+
             # SmolVLM requires special image token in text
             # Format: "<image>prompt"
             text_with_image = f"<image>{prompt}"
@@ -140,7 +142,7 @@ class SmolVLM(VLMModel):
             # Generate with ultra speed-optimized settings for real-time (<1s)
             output = self.model.generate(
                 **inputs,
-                max_new_tokens=10,      # Ultra-fast: 10 tokens max
+                max_new_tokens=target_tokens,
                 min_new_tokens=3,       # At least 3 tokens
                 do_sample=False,        # Greedy decoding (fastest)
                 num_beams=1,            # No beam search
@@ -218,7 +220,7 @@ class MobileVLM(VLMModel):
             raise
 
     @torch.inference_mode()
-    def caption(self, image: Image.Image, prompt: str = "Describe.") -> str:
+    def caption(self, image: Image.Image, prompt: str = "Describe.", max_new_tokens: int = 32) -> str:
         """Generate caption"""
         if not self.is_ready:
             raise RuntimeError("Model not loaded")
@@ -232,7 +234,7 @@ class MobileVLM(VLMModel):
 
             output = self.model.generate(
                 **inputs,
-                max_new_tokens=20,
+                max_new_tokens=max(10, min(int(max_new_tokens), 128)),
                 do_sample=False,
                 num_beams=1,
             )
@@ -556,7 +558,9 @@ class Qwen2VL(VLMModel):
         image: Image.Image,
         prompt: str,
         language: str = "en",
-        max_new_tokens: int = 128
+        max_new_tokens: int = 128,
+        min_new_tokens: int = 16,
+        use_sampling: bool = False
     ) -> str:
         """Shared helper to run Qwen2-VL chat style inference."""
         try:
@@ -588,17 +592,32 @@ class Qwen2VL(VLMModel):
                 return_tensors="pt"
             ).to(self.model.device)
 
+            generate_kwargs = {
+                "max_new_tokens": max_new_tokens,
+                "min_new_tokens": min_new_tokens,
+                "use_cache": True,
+                "repetition_penalty": 1.05,
+                "no_repeat_ngram_size": 4,
+                "pad_token_id": self.processor.tokenizer.pad_token_id,
+                "eos_token_id": self.processor.tokenizer.eos_token_id,
+                "num_beams": 1,
+            }
+
+            if use_sampling:
+                generate_kwargs.update({
+                    "do_sample": True,
+                    "top_p": 0.85,
+                    "temperature": 0.8,
+                    "top_k": 50,
+                })
+            else:
+                generate_kwargs.update({
+                    "do_sample": False,
+                })
+
             output_ids = self.model.generate(
                 **inputs,
-                max_new_tokens=max_new_tokens,
-                min_new_tokens=16,
-                do_sample=False,
-                num_beams=1,
-                use_cache=True,
-                repetition_penalty=1.05,
-                no_repeat_ngram_size=4,
-                pad_token_id=self.processor.tokenizer.pad_token_id,
-                eos_token_id=self.processor.tokenizer.eos_token_id,
+                **generate_kwargs
             )
 
             generated = output_ids[:, inputs.input_ids.shape[-1]:]
@@ -653,24 +672,47 @@ class Qwen2VL(VLMModel):
         self,
         image: Image.Image,
         prompt: Optional[str] = None,
-        language: str = "en"
+        language: str = "en",
+        response_length: str = "medium"
     ) -> str:
         """Generate descriptive caption for an image."""
         if not self.is_ready:
             raise RuntimeError("Model not loaded")
 
-        return self._generate_chat_response(
+        length_map = {
+            "short": {"max": 64, "min": 8, "sampling": True},
+            "medium": {"max": 128, "min": 16, "sampling": False},
+            "long": {"max": 256, "min": 24, "sampling": False},
+        }
+        cfg = length_map.get(response_length, length_map["medium"])
+
+        result = self._generate_chat_response(
             image,
             prompt,
-            language=language
+            language=language,
+            max_new_tokens=cfg["max"],
+            min_new_tokens=cfg["min"],
+            use_sampling=cfg["sampling"]
         )
+        if not result or not result.strip():
+            result = self._generate_chat_response(
+                image,
+                None,
+                language=language,
+                max_new_tokens=length_map["medium"]["max"],
+                min_new_tokens=length_map["medium"]["min"],
+                use_sampling=True
+            )
+
+        return result or "Unable to describe the image."
 
     @torch.inference_mode()
     def query(
         self,
         image: Image.Image,
         question: str,
-        language: str = "en"
+        language: str = "en",
+        response_length: str = "medium"
     ) -> str:
         """Answer a user question about the image."""
         if not self.is_ready:
@@ -680,11 +722,32 @@ class Qwen2VL(VLMModel):
         if not question_text:
             return "Please provide a question to ask about the image."
 
-        return self._generate_chat_response(
+        length_map = {
+            "short": {"max": 72, "min": 8, "sampling": False},
+            "medium": {"max": 144, "min": 16, "sampling": False},
+            "long": {"max": 256, "min": 24, "sampling": False},
+        }
+        cfg = length_map.get(response_length, length_map["medium"])
+
+        answer = self._generate_chat_response(
             image,
             question_text,
-            language=language
+            language=language,
+            max_new_tokens=cfg["max"],
+            min_new_tokens=cfg["min"],
+            use_sampling=cfg["sampling"]
         )
+        if not answer or not answer.strip():
+            answer = self._generate_chat_response(
+                image,
+                question_text,
+                language=language,
+                max_new_tokens=length_map["medium"]["max"],
+                min_new_tokens=length_map["medium"]["min"],
+                use_sampling=True
+            )
+
+        return answer or "Unable to answer right now."
 
 
 class VLMProcessor:
@@ -807,7 +870,7 @@ class VLMProcessor:
             )
         else:
             # SmolVLM/MobileVLM support caption and custom queries
-            result = await self._process_simple_vlm(image, mode, user_input)
+            result = await self._process_simple_vlm(image, mode, user_input, response_length)
 
         return result
 
@@ -815,7 +878,8 @@ class VLMProcessor:
         self,
         image: Image.Image,
         mode: str,
-        user_input: Optional[str] = None
+        user_input: Optional[str] = None,
+        response_length: str = "medium"
     ) -> Dict[str, Any]:
         """Process with Qwen2VL, SmolVLM or MobileVLM (supports custom queries)"""
 
@@ -837,7 +901,8 @@ class VLMProcessor:
                     self.model.query,
                     image,
                     prompt,
-                    self.language
+                    self.language,
+                    response_length
                 )
 
                 return {
@@ -853,7 +918,8 @@ class VLMProcessor:
                 self.model.caption,
                 image,
                 prompt,
-                self.language
+                self.language,
+                response_length
             )
 
             return {
@@ -865,16 +931,21 @@ class VLMProcessor:
             }
 
         # SmolVLM/MobileVLM require explicit user query
-        if not user_input or not user_input.strip():
-            return {
-                "type": "caption",
-                "caption": "Please enter a query using the 'Send Query' button",
-                "mode": mode,
-                "model": self.current_model_name
-            }
+        length_configs = {
+            "short": {"prompt": "Describe this scene in under 10 words.", "max_tokens": 16},
+            "medium": {"prompt": "Describe this scene briefly.", "max_tokens": 32},
+            "long": {"prompt": "Describe this scene in detail.", "max_tokens": 56},
+        }
+        cfg = length_configs.get(response_length, length_configs["medium"])
+        prompt_text = user_input.strip() if isinstance(user_input, str) and user_input.strip() else cfg["prompt"]
 
         # Run inference in thread pool (non-blocking)
-        caption = await asyncio.to_thread(self.model.caption, image, user_input)
+        caption = await asyncio.to_thread(
+            self.model.caption,
+            image,
+            prompt_text,
+            cfg["max_tokens"]
+        )
 
         return {
             "type": "caption",
@@ -1169,7 +1240,7 @@ class VLMProcessor:
 
         else:
             # Fallback to caption
-            return await self._process_simple_vlm(image, "caption")
+            return await self._process_simple_vlm(image, "caption", response_length=response_length)
 
     async def warmup(self, num_iterations: int = 2):
         """Warmup model with dummy inputs"""

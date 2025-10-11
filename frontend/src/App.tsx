@@ -351,8 +351,11 @@ export default function App() {
   useEffect(() => {
     if (lastError) {
       toast.error(lastError);
+      if (currentModel) {
+        setSelectedModel(currentModel as ModelType);
+      }
     }
-  }, [lastError]);
+  }, [lastError, currentModel]);
 
   return (
     <div className="min-h-screen animated-bg relative">

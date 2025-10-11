@@ -352,11 +352,19 @@ async def websocket_endpoint(websocket: WebSocket):
                         await vlm_processor.switch_model(model_name)
                     except Exception as e:
                         logger.error(f"Failed to switch model to {model_name}: {e}", exc_info=True)
+                        active_model = vlm_processor.current_model if vlm_processor else None
                         await websocket.send_json({
                             "type": "error",
-                            "message": f"Unable to load model '{model_name}'. Please check server logs.",
-                            "model": model_name
+                            "message": f"Unable to load model '{model_name}'. Please check server logs or install the required weights.",
+                            "model": model_name,
+                            "active_model": active_model
                         })
+                        if active_model and active_model != model_name:
+                            await websocket.send_json({
+                                "type": "model_switched",
+                                "model": active_model,
+                                "supported_modes": vlm_processor.get_supported_modes()
+                            })
                         continue
 
                     # Get supported modes for new model
@@ -726,7 +734,13 @@ async def switch_model(params: dict):
         return {"status": "success", "model": model_name}
     except Exception as e:
         logger.error(f"Error switching model: {e}")
-        return {"status": "error", "message": str(e)}
+        active_model = vlm_processor.current_model if vlm_processor else None
+        return {
+            "status": "error",
+            "message": str(e),
+            "model": model_name,
+            "active_model": active_model
+        }
 
 
 if __name__ == "__main__":

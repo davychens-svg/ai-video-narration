@@ -113,6 +113,9 @@ export function useWebSocket({
                 'Server reported an unknown error.';
               log(`Server error: ${errorMessage}`);
               setLastError(errorMessage);
+              if (typeof message.active_model === 'string') {
+                setCurrentModel(message.active_model);
+              }
               break;
             
             default:
