@@ -642,8 +642,8 @@ class Qwen2VL(VLMModel):
             if use_sampling:
                 generate_kwargs.update({
                     "do_sample": True,
-                    "top_p": 0.85,
-                    "temperature": 0.8,
+                    "top_p": 0.8,
+                    "temperature": 0.7,
                     "top_k": 50,
                 })
             else:
@@ -756,8 +756,8 @@ class Qwen2VL(VLMModel):
 
         length_map = {
             "short": {"max": 64, "min": 8, "sampling": True},
-            "medium": {"max": 128, "min": 16, "sampling": False},
-            "long": {"max": 256, "min": 24, "sampling": False},
+            "medium": {"max": 128, "min": 16, "sampling": True},
+            "long": {"max": 256, "min": 24, "sampling": True},
         }
         cfg = length_map.get(response_length, length_map["medium"])
 
@@ -822,9 +822,9 @@ class Qwen2VL(VLMModel):
             return "Please provide a question to ask about the image."
 
         length_map = {
-            "short": {"max": 72, "min": 8, "sampling": False},
-            "medium": {"max": 144, "min": 16, "sampling": False},
-            "long": {"max": 256, "min": 24, "sampling": False},
+            "short": {"max": 72, "min": 8, "sampling": True},
+            "medium": {"max": 144, "min": 16, "sampling": True},
+            "long": {"max": 256, "min": 24, "sampling": True},
         }
         cfg = length_map.get(response_length, length_map["medium"])
 
