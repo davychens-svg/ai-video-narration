@@ -498,6 +498,12 @@ class Qwen2VL(VLMModel):
     def __init__(self, device: str = "auto"):
         super().__init__("qwen2vl", device)
         self.tokenizer = None
+        self._processor_name = "Qwen/Qwen2-VL-2B-Instruct"
+        self._processor_kwargs = {
+            "trust_remote_code": True,
+            "min_pixels": 256 * 28 * 28,
+            "max_pixels": 1280 * 28 * 28,
+        }
 
     def load(self):
         """Load Qwen2-VL-2B-Instruct model"""
@@ -541,10 +547,8 @@ class Qwen2VL(VLMModel):
 
             # Load processor with optimized image token settings
             self.processor = AutoProcessor.from_pretrained(
-                "Qwen/Qwen2-VL-2B-Instruct",
-                trust_remote_code=True,
-                min_pixels=256*28*28,   # Reduce visual tokens for speed
-                max_pixels=1280*28*28   # Balance quality and speed
+                self._processor_name,
+                **self._processor_kwargs
             )
 
             self.is_ready = True
@@ -563,6 +567,15 @@ class Qwen2VL(VLMModel):
             "ko": "이 이미지를 간단히 설명해주세요."
         }
         return defaults.get(language, defaults["en"])
+
+    def _ensure_processor(self):
+        """Reinitialize processor if it was cleared during model unload."""
+        if self.processor is None:
+            logger.warning("Qwen2-VL processor missing; reinitializing processor.")
+            self.processor = AutoProcessor.from_pretrained(
+                self._processor_name,
+                **self._processor_kwargs
+            )
 
     def _detect_language(self, text: Optional[str]) -> Optional[str]:
         """Heuristic language detection based on character ranges."""
@@ -590,6 +603,8 @@ class Qwen2VL(VLMModel):
     ) -> str:
         """Shared helper to run Qwen2-VL chat style inference."""
         try:
+            self._ensure_processor()
+
             message_text = prompt or self._default_prompt(response_language)
 
             language_instructions = {
