@@ -85,15 +85,18 @@ npm install
 cd ..
 ```
 
-### Configure environment
+### Configure environment (use your public IP)
 ```bash
-# Backend CORS (allow your frontend domain)
-export ALLOWED_ORIGINS="https://vision.example.com"
+# Replace with the server's public IP
+PUBLIC_IP=203.0.113.10
+
+# Backend CORS (allow requests from browser clients)
+export ALLOWED_ORIGINS="http://$PUBLIC_IP,http://$PUBLIC_IP:3000"
 
 # Frontend API endpoints (create .env file before building)
-cat <<'ENV' > frontend/.env.production
-VITE_SERVER_URL=https://api.vision.example.com
-VITE_WS_URL=wss://api.vision.example.com/ws
+cat <<ENV > frontend/.env.production
+VITE_SERVER_URL=http://$PUBLIC_IP:8001
+VITE_WS_URL=ws://$PUBLIC_IP:8001/ws
 ENV
 ```
 
@@ -116,13 +119,13 @@ but for production you should use a reverse proxy such as Nginx.
 
 ### Nginx proxy example
 
-Serve the compiled frontend at `vision.example.com` and proxy API/WebSocket traffic to the backend running on port 8001.
+Serve the compiled frontend and proxy API/WebSocket traffic to the backend running on port 8001. Substitute your own domain names if you have them; otherwise this section is optional.
 
 ```nginx
 # /etc/nginx/sites-available/vision-frontend
 server {
     listen 80;
-    server_name vision.example.com;
+server_name vision.example.com;  # optional domain (use your own)
     root /var/www/vision-frontend;
     index index.html;
 
@@ -138,7 +141,7 @@ upstream vision_api {
 
 server {
     listen 80;
-    server_name api.vision.example.com;
+server_name api.vision.example.com;  # optional domain (use your own)
 
     location / {
         proxy_pass http://vision_api;
@@ -168,19 +171,17 @@ sudo ln -s /etc/nginx/sites-available/vision-api /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
 sudo apt install certbot python3-certbot-nginx -y
+# Optional HTTPS (replace domains as needed)
 sudo certbot --nginx -d vision.example.com -d api.vision.example.com
 ```
 
 ---
 
-## Configuration Reference
+## Configuration at a Glance
 
-| Variable | Scope | Default | Notes |
-|----------|-------|---------|-------|
-| `ALLOWED_ORIGINS` | Backend | `http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001` | Comma-separated list of origins. Use `*` to allow all (credentials automatically disabled). |
-| `HOST` / `PORT` | Backend | `0.0.0.0` / `8001` | Optional overrides for the FastAPI host/port. |
-| `VITE_SERVER_URL` | Frontend | Auto-detected OR value from `.env` | REST base URL. Set to public API domain when deploying. |
-| `VITE_WS_URL` | Frontend | Auto-detected OR value from `.env` | WebSocket endpoint. Use `wss://` for HTTPS sites. |
+- **Local dev**: use the defaults (`http://localhost:8001` backend, `http://localhost:3000` frontend). No extra env vars required.
+- **Cloud server**: set `PUBLIC_IP`, export `ALLOWED_ORIGINS="http://$PUBLIC_IP,http://$PUBLIC_IP:3000"`, and create `frontend/.env.production` with `VITE_SERVER_URL`/`VITE_WS_URL` pointing at the IP (as shown above).
+- **Custom domain / HTTPS (optional)**: update the `.env` values and `ALLOWED_ORIGINS` to match your domain, then follow the Nginx section to enable TLS.
 
 ---
 
