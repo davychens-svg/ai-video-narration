@@ -80,8 +80,7 @@ Should show driver version 535+ and your GPU.
 ### 2.2 Install CUDA Toolkit
 
 ```bash
-wget https://developer.download.nvidia.com/compute/cuda/12.0.0/local_installers/cuda_12.0.0_525.60.13_linux.run
-sh cuda_12.0.0_525.60.13_linux.run
+apt install nvidia-cuda-toolkit
 ```
 
 Add to `~/.bashrc`:
