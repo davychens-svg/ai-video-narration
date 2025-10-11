@@ -273,7 +273,27 @@ export function VideoStreaming({
 
       // Wait for video to load
       videoRef.current.onloadedmetadata = async () => {
-        console.log('Video metadata loaded, dimensions:', videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight);
+        console.log(
+          'Video metadata loaded, dimensions:',
+          videoRef.current?.videoWidth,
+          'x',
+          videoRef.current?.videoHeight
+        );
+
+        // Inform parent that a stream-like source is ready so model switching/config happens
+        const mediaEl = videoRef.current;
+        const capturedStream =
+          (mediaEl as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.() ??
+          (mediaEl as HTMLVideoElement & { mozCaptureStream?: () => MediaStream }).mozCaptureStream?.() ??
+          null;
+
+        if (capturedStream) {
+          onStreamReady(capturedStream);
+        } else {
+          // Fallback: provide an empty MediaStream so downstream logic still triggers
+          onStreamReady(new MediaStream());
+        }
+
         setIsStreaming(true);
 
         // Small delay to ensure video is ready
