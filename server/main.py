@@ -209,13 +209,15 @@ async def startup_event():
     logger.info("Starting Vision AI Demo Server...")
     logger.info("Initializing VLM processor...")
 
-    vlm_processor = VLMProcessor(model_name="smolvlm")
+    # Get default model from environment or use qwen2vl
+    default_model = os.getenv("DEFAULT_MODEL", "qwen2vl")
+    vlm_processor = VLMProcessor(model_name=default_model, language="en")
     await vlm_processor.warmup()
 
     # Start background frame processing task
     asyncio.create_task(process_frames_task())
 
-    logger.info("Server ready! 🚀")
+    logger.info(f"Server ready with {default_model} model! 🚀")
 
 
 @app.on_event("shutdown")
@@ -556,6 +558,11 @@ async def process_frame(params: dict):
             if normalized_length in {"short", "medium", "long"}:
                 response_length_setting = normalized_length
 
+        # Get language from request (default: en)
+        language = params.get("language", "en")
+        if vlm_processor:
+            vlm_processor.language = language
+
         # Process with VLM
         start_time = time.time()
         result = await vlm_processor.process_frame(
@@ -578,7 +585,8 @@ async def process_frame(params: dict):
             "detections": result.get("detections"),
             "points": result.get("points"),
             "object": result.get("object"),
-            "fallback_used": result.get("fallback_used", False)
+            "fallback_used": result.get("fallback_used", False),
+            "language": language
         }
 
     except Exception as e:

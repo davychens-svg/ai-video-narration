@@ -27,6 +27,9 @@ torchvision>=0.16.0
 transformers>=4.35.0
 accelerate>=0.25.0
 
+# Qwen2-VL dependencies
+qwen-vl-utils>=0.0.8
+
 # Additional dependencies
 sentencepiece>=0.1.99
 protobuf>=4.25.0

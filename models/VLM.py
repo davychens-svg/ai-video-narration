@@ -11,7 +11,8 @@ from typing import Optional, Literal, List, Dict, Tuple, Any
 import torch
 import numpy as np
 from PIL import Image
-from transformers import AutoModelForVision2Seq, AutoProcessor
+from transformers import AutoModelForVision2Seq, AutoProcessor, Qwen2VLForConditionalGeneration
+from qwen_vl_utils import process_vision_info
 
 logger = logging.getLogger(__name__)
 
@@ -472,15 +473,163 @@ class Moondream(VLMModel):
             return []
 
 
+class Qwen2VL(VLMModel):
+    """
+    Qwen2-VL-2B-Instruct - Multilingual vision-language model
+    Supports: English, Japanese, Chinese, Korean, and more
+    Native multilingual capability without translation layer
+    """
+
+    def __init__(self, device: str = "auto"):
+        super().__init__("qwen2vl", device)
+        self.tokenizer = None
+
+    def load(self):
+        """Load Qwen2-VL-2B-Instruct model"""
+        logger.info("Loading Qwen2-VL-2B-Instruct...")
+
+        try:
+            # Determine device and dtype
+            if torch.cuda.is_available():
+                dtype = torch.float16
+                device_map = "auto"
+                # Use flash_attention_2 for speed on Ampere+ GPUs
+                attn_implementation = "flash_attention_2"
+            elif torch.backends.mps.is_available():
+                dtype = torch.bfloat16
+                device_map = "mps"
+                attn_implementation = "eager"  # MPS doesn't support flash attention
+            else:
+                dtype = torch.float32
+                device_map = "cpu"
+                attn_implementation = "eager"
+
+            logger.info(f"Qwen2-VL using device: {device_map}, dtype: {dtype}, attn: {attn_implementation}")
+
+            # Load model with optimizations
+            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                "Qwen/Qwen2-VL-2B-Instruct",
+                torch_dtype=dtype,
+                device_map=device_map,
+                low_cpu_mem_usage=True,
+                trust_remote_code=True,
+                attn_implementation=attn_implementation
+            )
+
+            # Load processor with optimized image token settings
+            self.processor = AutoProcessor.from_pretrained(
+                "Qwen/Qwen2-VL-2B-Instruct",
+                trust_remote_code=True,
+                min_pixels=256*28*28,   # Reduce visual tokens for speed
+                max_pixels=1280*28*28   # Balance quality and speed
+            )
+
+            self.is_ready = True
+            logger.info("Qwen2-VL-2B-Instruct loaded successfully!")
+
+        except Exception as e:
+            logger.error(f"Failed to load Qwen2-VL-2B-Instruct: {e}")
+            raise
+
+    @torch.inference_mode()
+    def caption(self, image: Image.Image, prompt: str = "Describe this image.", language: str = "en") -> str:
+        """
+        Generate caption with native multilingual support
+
+        Args:
+            image: PIL Image
+            prompt: User prompt in any supported language
+            language: Language code ('en', 'ja', 'zh', etc.) - used for response formatting
+        """
+        if not self.is_ready:
+            raise RuntimeError("Model not loaded")
+
+        try:
+            # Default prompts for each language if none provided
+            if not prompt or prompt == "Describe this image.":
+                default_prompts = {
+                    "en": "Describe this image briefly.",
+                    "ja": "この画像を簡潔に説明してください。",
+                    "zh": "简要描述这张图片。"
+                }
+                prompt = default_prompts.get(language, default_prompts["en"])
+
+            # Prepare messages in Qwen2-VL chat format
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": image},
+                        {"type": "text", "text": prompt}
+                    ]
+                }
+            ]
+
+            # Apply chat template
+            text = self.processor.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+
+            # Process vision info
+            image_inputs, video_inputs = process_vision_info(messages)
+
+            # Prepare inputs
+            inputs = self.processor(
+                text=[text],
+                images=image_inputs,
+                videos=video_inputs,
+                padding=True,
+                return_tensors="pt"
+            )
+            inputs = inputs.to(self.model.device)
+
+            # Generate with speed-optimized settings
+            output_ids = self.model.generate(
+                **inputs,
+                max_new_tokens=128,      # Reasonable length
+                do_sample=False,         # Deterministic for speed
+                num_beams=1,             # Greedy decoding
+                use_cache=True,          # Enable KV cache
+                pad_token_id=self.processor.tokenizer.pad_token_id,
+                eos_token_id=self.processor.tokenizer.eos_token_id,
+            )
+
+            # Decode response
+            generated_ids = [
+                output_ids[len(input_ids):]
+                for input_ids, output_ids in zip(inputs.input_ids, output_ids)
+            ]
+
+            caption = self.processor.batch_decode(
+                generated_ids,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False
+            )[0]
+
+            # Clean up caption
+            caption = caption.strip()
+
+            return caption if caption else "Processing..."
+
+        except Exception as e:
+            logger.error(f"Error generating caption with Qwen2-VL: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return "Error processing frame"
+
+
 class VLMProcessor:
     """
     High-level VLM processor with model switching and optimization
-    Supports: SmolVLM-500M (primary), Moondream 2 (feature-rich)
+    Supports: Qwen2-VL-2B (multilingual), SmolVLM-500M, Moondream 2 (feature-rich)
     """
 
-    def __init__(self, model_name: str = "smolvlm"):
+    def __init__(self, model_name: str = "qwen2vl", language: str = "en"):
         self.current_model_name = model_name
         self.model: Optional[VLMModel] = None
+        self.language = language  # User's preferred language
         self.base_target_size = (128, 128)  # Default resize for lightweight models
         self._load_model(model_name)
 
@@ -491,7 +640,10 @@ class VLMProcessor:
             self.model.unload()
 
         # Load new model
-        if model_name == "smolvlm":
+        if model_name == "qwen2vl":
+            self.model = Qwen2VL()
+            self.base_target_size = (384, 384)  # Higher resolution for Qwen2-VL
+        elif model_name == "smolvlm":
             self.model = SmolVLM()
             self.base_target_size = (128, 128)
         elif model_name == "mobilevlm":
@@ -598,8 +750,30 @@ class VLMProcessor:
         mode: str,
         user_input: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Process with SmolVLM or MobileVLM (supports custom queries only)"""
-        # SmolVLM requires explicit user query - no automatic captioning
+        """Process with Qwen2VL, SmolVLM or MobileVLM (supports custom queries)"""
+
+        # Qwen2VL has multilingual support and can handle prompts in any language
+        if isinstance(self.model, Qwen2VL):
+            # Use user input or default prompt
+            prompt = user_input if user_input and user_input.strip() else None
+
+            # Run inference with language parameter
+            caption = await asyncio.to_thread(
+                self.model.caption,
+                image,
+                prompt if prompt else "Describe this image.",
+                self.language
+            )
+
+            return {
+                "type": "caption",
+                "caption": caption,
+                "mode": mode,
+                "model": self.current_model_name,
+                "language": self.language
+            }
+
+        # SmolVLM/MobileVLM require explicit user query
         if not user_input or not user_input.strip():
             return {
                 "type": "caption",
