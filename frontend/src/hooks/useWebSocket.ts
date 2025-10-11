@@ -72,21 +72,30 @@ export function useWebSocket({
           log(`Received message: ${message.type}`);
 
           switch (message.type) {
-            case 'caption':
+            case 'caption': {
+              const captionContent =
+                message.data?.caption ??
+                message.data?.content ??
+                message.data?.error ??
+                'No response';
+
               const newCaption: Caption = {
                 id: Date.now().toString(),
                 timestamp: message.timestamp || new Date().toISOString(),
-                content: message.data.content,
-                model: message.data.model,
-                confidence: message.data.confidence,
-                feature: message.data.feature,
-                latency_ms: message.data.latency_ms
+                content: captionContent,
+                model: message.data?.model ?? 'unknown',
+                confidence: message.data?.confidence,
+                feature: message.data?.feature,
+                latency_ms: message.data?.latency_ms
               };
+
               setCaptions(prev => [...prev, newCaption]);
+
               if (onCaptionData) {
                 onCaptionData(message.data);
               }
               break;
+            }
             
             case 'status':
               log(`Status update: ${JSON.stringify(message.data)}`);
