@@ -1,11 +1,11 @@
 # Deployment Guide
 
-This guide focuses on two common scenarios:
+This guide covers two common scenarios:
 
-1. **Local development on macOS** (everything runs on your laptop).
-2. **Public cloud deployment on a Linux/NVIDIA server** (accessible via a public IP or domain).
+1. **Local development on macOS** – everything runs on your laptop.
+2. **Public cloud deployment on a Linux/NVIDIA server** – exposed via a public IP (domains/HTTPS optional).
 
-The backend already supports configurable origins via the `ALLOWED_ORIGINS` environment variable, and the frontend reads `VITE_SERVER_URL` / `VITE_WS_URL`. Make sure those values point to the correct host before exposing the app publicly.
+The backend reads `ALLOWED_ORIGINS` for CORS and the frontend uses `VITE_SERVER_URL` / `VITE_WS_URL`. Set those to match the environment you are deploying to.
 
 ---
 
@@ -15,7 +15,7 @@ The backend already supports configurable origins via the `ALLOWED_ORIGINS` envi
 - macOS 12+ on Apple Silicon (M1/M2/M3/M4)
 - Python 3.11+
 - Node.js 18+
-- Homebrew (optional but recommended)
+- Homebrew (convenient but optional)
 
 ### Setup
 ```bash
@@ -49,58 +49,101 @@ cd frontend
 npm run dev
 ```
 
-Open http://localhost:3000 to interact with the app. The backend listens on `http://localhost:8001` by default, and `ALLOWED_ORIGINS` already includes the common localhost URLs.
+Open http://localhost:3000. The backend listens on `http://localhost:8001` by default and already whitelists common localhost origins.
 
 ---
 
 ## 2. Cloud Deployment (Linux + NVIDIA GPU, public IP)
 
-### Prerequisites
-- Ubuntu 20.04/22.04 (or similar)
-- NVIDIA GPU with recent drivers and CUDA 11.8+ or 12.x
-- Python 3.11+
-- Node.js 18+
-- Nginx (optional, recommended for HTTPS)
+These steps assume a Linode GPU instance running Ubuntu 22.04, but they apply to any Ubuntu-based provider.
 
-### Setup summary
+### 2.1 Provision a server
+1. Create a new GPU instance (Ubuntu 22.04 LTS).
+2. Add your SSH public key or set a strong root password.
+3. Note the public IP (e.g. `203.0.113.10`).
+4. Optional: create DNS records (`vision.example.com`, `api.vision.example.com`) pointing to the IP.
+
+### 2.2 First login & basic hardening
 ```bash
-# Update system and install dependencies
-sudo apt update && sudo apt install -y python3-venv python3-dev build-essential nodejs npm nginx
+ssh root@203.0.113.10
 
-# Install GPU drivers / CUDA (verify with nvidia-smi)
+# (Optional) create a non-root user
+adduser vision
+usermod -aG sudo vision
+su - vision
 
-# Clone the repo
+# Update packages
+sudo apt update && sudo apt upgrade -y
+
+# Firewall (UFW): open SSH, HTTP/HTTPS, backend port
+sudo apt install ufw -y
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 8001/tcp
+sudo ufw enable
+```
+
+### 2.3 Install NVIDIA drivers & CUDA
+```bash
+sudo apt install -y software-properties-common
+sudo add-apt-repository ppa:graphics-drivers/ppa -y
+sudo apt update
+sudo apt install -y nvidia-driver-535
+sudo reboot
+```
+
+Reconnect and verify:
+```bash
+nvidia-smi
+
+# Install CUDA 12.2 (example)
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
+sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
+wget https://developer.download.nvidia.com/compute/cuda/12.2.0/local_installers/cuda-repo-ubuntu2204-12-2-local_12.2.0-535.54.03-1_amd64.deb
+sudo dpkg -i cuda-repo-ubuntu2204-12-2-local_12.2.0-535.54.03-1_amd64.deb
+sudo cp /var/cuda-repo-ubuntu2204-12-2-local/cuda-*-keyring.gpg /usr/share/keyrings/
+sudo apt update
+sudo apt install -y cuda
+
+echo 'export PATH=/usr/local/cuda/bin:$PATH' | sudo tee -a /etc/profile.d/cuda.sh
+source /etc/profile.d/cuda.sh
+nvcc --version
+```
+
+### 2.4 Install project prerequisites
+```bash
+sudo apt install -y python3-venv python3-dev build-essential nodejs npm git nginx
+```
+
+### 2.5 Fetch the project & install dependencies
+```bash
 git clone https://github.com/davychens-svg/ai-video-narration.git
 cd ai-video-narration
 
-# Python environment
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Frontend dependencies
 cd frontend
 npm install
 cd ..
 ```
 
-### Configure environment (use your public IP)
+### 2.6 Configure environment (using your IP)
 ```bash
-# Replace with the server's public IP
-PUBLIC_IP=203.0.113.10
+PUBLIC_IP=203.0.113.10  # replace with your server IP
 
-# Backend CORS (allow requests from browser clients)
 export ALLOWED_ORIGINS="http://$PUBLIC_IP,http://$PUBLIC_IP:3000"
 
-# Frontend API endpoints (create .env file before building)
-cat <<ENV > frontend/.env.production
+cat <<'ENV' > frontend/.env.production
 VITE_SERVER_URL=http://$PUBLIC_IP:8001
 VITE_WS_URL=ws://$PUBLIC_IP:8001/ws
 ENV
 ```
 
-### Run the services
+### 2.7 Run the services
 ```bash
 # Backend (FastAPI)
 cd server
@@ -111,21 +154,20 @@ cd ../frontend
 npm run build
 ```
 
-Serve the `frontend/dist` directory via your web server of choice. The simplest option during testing is:
+Quick smoke test (optional):
 ```bash
 npx serve -s dist -l 3000
 ```
-but for production you should use a reverse proxy such as Nginx.
+Open `http://203.0.113.10:3000` and confirm the app connects to the backend.
 
-### Nginx proxy example
-
-Serve the compiled frontend and proxy API/WebSocket traffic to the backend running on port 8001. Substitute your own domain names if you have them; otherwise this section is optional.
+### 2.8 Optional: domain & HTTPS (Nginx)
+If you have DNS records, serve the static frontend and proxy API/WebSocket traffic. Replace domain names as needed.
 
 ```nginx
 # /etc/nginx/sites-available/vision-frontend
 server {
     listen 80;
-server_name vision.example.com;  # optional domain (use your own)
+    server_name vision.example.com;
     root /var/www/vision-frontend;
     index index.html;
 
@@ -141,7 +183,7 @@ upstream vision_api {
 
 server {
     listen 80;
-server_name api.vision.example.com;  # optional domain (use your own)
+    server_name api.vision.example.com;
 
     location / {
         proxy_pass http://vision_api;
@@ -163,33 +205,42 @@ server_name api.vision.example.com;  # optional domain (use your own)
 }
 ```
 
-Link the sites, reload Nginx, and add TLS with Certbot if desired:
-
 ```bash
+sudo mkdir -p /var/www/vision-frontend
+sudo cp -r frontend/dist/* /var/www/vision-frontend/
 sudo ln -s /etc/nginx/sites-available/vision-frontend /etc/nginx/sites-enabled/
 sudo ln -s /etc/nginx/sites-available/vision-api /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
+# Optional HTTPS
 sudo apt install certbot python3-certbot-nginx -y
-# Optional HTTPS (replace domains as needed)
 sudo certbot --nginx -d vision.example.com -d api.vision.example.com
+```
+
+### 2.9 Smoke test
+```bash
+curl http://203.0.113.10:8001/health
+# -> should return JSON with status "ok"
+
+# Visit the frontend (IP or domain)
+open http://203.0.113.10:3000
 ```
 
 ---
 
 ## Configuration at a Glance
 
-- **Local dev**: use the defaults (`http://localhost:8001` backend, `http://localhost:3000` frontend). No extra env vars required.
-- **Cloud server**: set `PUBLIC_IP`, export `ALLOWED_ORIGINS="http://$PUBLIC_IP,http://$PUBLIC_IP:3000"`, and create `frontend/.env.production` with `VITE_SERVER_URL`/`VITE_WS_URL` pointing at the IP (as shown above).
-- **Custom domain / HTTPS (optional)**: update the `.env` values and `ALLOWED_ORIGINS` to match your domain, then follow the Nginx section to enable TLS.
+- **Local dev**: no extra env vars—defaults to localhost.
+- **Cloud server**: set `PUBLIC_IP`, export `ALLOWED_ORIGINS="http://$PUBLIC_IP,http://$PUBLIC_IP:3000"`, create `frontend/.env.production` with matching URLs, then build the frontend.
+- **Custom domains / HTTPS**: update the env values and Nginx config to use your domain; enable TLS with Certbot.
 
 ---
 
 ## Troubleshooting
 
-- **CORS errors**: confirm `ALLOWED_ORIGINS` includes your exact frontend origin (scheme + host + port).
-- **WebSocket disconnects**: ensure the proxy forwards upgrade headers (`Upgrade` / `Connection`).
-- **Model download issues**: pre-fetch the models where outbound internet is blocked, or mirror them to an internal storage location.
-- **CUDA/MPS not detected**: check `nvidia-smi` on Linux or `system_profiler SPDisplaysDataType` on macOS.
+- **CORS blocked**: ensure `ALLOWED_ORIGINS` exactly matches the requesting origin (scheme + host + port).
+- **WebSocket disconnects**: confirm the proxy forwards `Upgrade` / `Connection` headers.
+- **`nvidia-smi` fails**: reinstall drivers, check the GPU attachment, or reboot after driver installation.
+- **Models fail to download**: pre-fetch while you have internet access and copy into the Hugging Face cache on the server.
 
-With these steps you can iterate locally on macOS and deploy the exact same stack to a public Linux/NVIDIA server without being locked to localhost.
+With these steps you can iterate locally and deploy the same stack to a GPU-powered cloud server using either a raw IP or a full domain.
