@@ -485,10 +485,27 @@ async def offer(params: dict):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    # Check if llama-server is available by checking if port 8080 is accessible
+    llamacpp_available = False
+    try:
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5)
+        result = sock.connect_ex(('127.0.0.1', 8080))
+        llamacpp_available = (result == 0)
+        sock.close()
+    except:
+        pass
+
+    # Determine recommended backend based on what's available
+    backend_type = "llamacpp" if llamacpp_available else "transformers"
+
     return {
         "status": "ok",
         "model_loaded": vlm_processor is not None and vlm_processor.model is not None,
-        "model": vlm_processor.current_model if vlm_processor else "not loaded"
+        "model": vlm_processor.current_model if vlm_processor else "not loaded",
+        "backend_type": backend_type,
+        "llamacpp_available": llamacpp_available
     }
 
 

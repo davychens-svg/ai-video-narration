@@ -141,15 +141,23 @@ export default function App() {
 
   const modelReady = currentModel === selectedModel && !isModelSwitching;
 
-  // Backend connection status (simplified for demo)
+  // Backend connection status and type detection
   const [backendConnected, setBackendConnected] = useState(false);
+  const [backendType, setBackendType] = useState<'llamacpp' | 'transformers'>('transformers');
 
-  // Check backend connection
+  // Check backend connection and detect backend type
   useEffect(() => {
     const checkBackend = async () => {
       try {
         const response = await fetch(`${settings.serverUrl}/health`);
-        setBackendConnected(response.ok);
+        if (response.ok) {
+          const data = await response.json();
+          setBackendConnected(true);
+          // Use backend_type from health check to determine which endpoint to use
+          setBackendType(data.backend_type || 'transformers');
+        } else {
+          setBackendConnected(false);
+        }
       } catch (error) {
         setBackendConnected(false);
       }
@@ -157,7 +165,7 @@ export default function App() {
 
     checkBackend();
     const interval = setInterval(checkBackend, 10000); // Check every 10 seconds
-    
+
     return () => clearInterval(interval);
   }, [settings.serverUrl]);
 
@@ -397,7 +405,7 @@ export default function App() {
                       ? 'mask'
                       : 'none'
                   }
-                  backend={selectedModel === 'moondream' ? 'transformers' : 'llamacpp'}
+                  backend={backendType}
                   prompt={customQuery}
                   modelReady={modelReady}
                   responseLength={settings.responseLength}
