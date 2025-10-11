@@ -158,7 +158,7 @@ export function VideoStreaming({
             ? '/api/process_frame_llamacpp'
             : '/api/process_frame';
 
-          // Send to backend with prompt and response length
+          // Send to backend with prompt, response length, and language
           const response = await fetch(`${serverUrl}${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -166,7 +166,8 @@ export function VideoStreaming({
               image: imageData,
               prompt: prompt,
               custom_query: prompt,
-              response_length: responseLength
+              response_length: responseLength,
+              language: language
             })
           });
 

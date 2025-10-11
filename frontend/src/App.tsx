@@ -61,7 +61,7 @@ export default function App() {
   };
 
   // Application state
-  const [selectedModel, setSelectedModel] = useState<ModelType>('smolvlm');
+  const [selectedModel, setSelectedModel] = useState<ModelType>('qwen2vl');
   const [moondreamFeature, setMoondreamFeature] = useState<MoondreamFeature>('caption');
   const [customQuery, setCustomQuery] = useState(translations.defaultPrompt);
   const [isModelSwitching, setIsModelSwitching] = useState(false);
@@ -225,7 +225,7 @@ export default function App() {
       const queryValue =
         selectedModel === 'moondream'
           ? (feature === 'caption' ? null : normalizeQuery(customQuery))
-          : normalizeQuery(customQuery);
+          : normalizeQuery(customQuery);  // Qwen2-VL and SmolVLM both require queries
 
       pushConfiguration(selectedModel, feature, queryValue, undefined, {
         videoQuality: settings.videoQuality,
@@ -268,7 +268,7 @@ export default function App() {
     );
 
     if (videoStreamActive) {
-      const modelLabel = model === 'smolvlm' ? translations.modelSmolVLM : translations.modelMoondream;
+      const modelLabel = model === 'qwen2vl' ? translations.modelQwen2VL : model === 'smolvlm' ? translations.modelSmolVLM : translations.modelMoondream;
       toast.info(translations.toastModelSwitching.replace('{model}', modelLabel));
     }
   };
@@ -296,7 +296,7 @@ export default function App() {
     const trimmedQuery = normalizeQuery(customQuery);
     if (!trimmedQuery || !videoStreamActive) return;
 
-    const modelLabel = selectedModel === 'smolvlm' ? translations.modelSmolVLM : translations.modelMoondream;
+    const modelLabel = selectedModel === 'qwen2vl' ? translations.modelQwen2VL : selectedModel === 'smolvlm' ? translations.modelSmolVLM : translations.modelMoondream;
     const success = pushConfiguration(
       selectedModel,
       selectedModel === 'moondream' ? moondreamFeature : null,
@@ -406,8 +406,8 @@ export default function App() {
                       : 'none'
                   }
                   backend={
-                    selectedModel === 'moondream'
-                      ? 'transformers'  // Moondream always uses transformers
+                    selectedModel === 'moondream' || selectedModel === 'qwen2vl'
+                      ? 'transformers'  // Moondream and Qwen2-VL always use transformers
                       : backendType     // SmolVLM uses detected backend (llamacpp on Mac, transformers on Linux)
                   }
                   prompt={customQuery}

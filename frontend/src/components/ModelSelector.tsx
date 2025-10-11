@@ -3,10 +3,10 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Brain, Eye, Search, Target, Send, Check } from 'lucide-react';
+import { Brain, Eye, Search, Target, Send, Check, Languages } from 'lucide-react';
 import { Language, getTranslations, FeatureKey } from '../lib/i18n';
 
-export type ModelType = 'smolvlm' | 'moondream';
+export type ModelType = 'qwen2vl' | 'smolvlm' | 'moondream';
 export type MoondreamFeature = 'query' | 'caption' | 'detection' | 'point' | 'mask';
 
 interface ModelSelectorProps {
@@ -38,6 +38,12 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   const t = getTranslations(language);
   const modelInfo = {
+    qwen2vl: {
+      name: t.modelQwen2VL,
+      description: t.modelQwen2VLDesc,
+      icon: <Languages className="w-4 h-4" />,
+      features: t.modelQwen2VLFeatures
+    },
     smolvlm: {
       name: t.modelSmolVLM,
       description: t.modelSmolVLMDesc,
@@ -95,10 +101,29 @@ export function ModelSelector({
         {/* Model Selection */}
         <div className="space-y-2">
           <Label>{t.modelSelectLabel}</Label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <Button
               variant="outline"
-              className={`h-auto py-4 px-4 ${
+              className={`h-auto py-4 px-3 ${
+                selectedModel === 'qwen2vl'
+                  ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm'
+                  : 'hover:bg-accent'
+              }`}
+              onClick={() => onModelChange('qwen2vl')}
+              disabled={isProcessing}
+            >
+              <div className="flex items-center gap-2 w-full">
+                {modelInfo.qwen2vl.icon}
+                <div className="flex flex-col items-start flex-1">
+                  <span className="font-semibold text-sm">{modelInfo.qwen2vl.name}</span>
+                  <span className="text-xs opacity-80">{t.modelQwen2VLTagline}</span>
+                </div>
+                {selectedModel === 'qwen2vl' && <Check className="w-5 h-5" />}
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className={`h-auto py-4 px-3 ${
                 selectedModel === 'smolvlm'
                   ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm'
                   : 'hover:bg-accent'
@@ -117,7 +142,7 @@ export function ModelSelector({
             </Button>
             <Button
               variant="outline"
-              className={`h-auto py-4 px-4 ${
+              className={`h-auto py-4 px-3 ${
                 selectedModel === 'moondream'
                   ? 'bg-gradient-to-br from-purple-500/90 to-pink-500/90 text-white border-purple-400/50 hover:from-purple-600/90 hover:to-pink-600/90 backdrop-blur-sm'
                   : 'hover:bg-accent'
@@ -154,6 +179,57 @@ export function ModelSelector({
             ))}
           </div>
         </div>
+
+        {/* Qwen2-VL Query */}
+        {selectedModel === 'qwen2vl' && (
+          <div className="space-y-4">
+            {/* Multilingual Status */}
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <p className="text-xs text-blue-400 flex items-center gap-2">
+                <Check className="w-4 h-4" />
+                <span className="font-medium">{language === 'ja' ? '多言語対応モデル' : 'Multilingual Support Enabled'}</span>
+                <span className="opacity-70">{language === 'ja' ? '· 日本語ネイティブ対応 · 翻訳不要' : '· Native Japanese/Chinese · No Translation'}</span>
+              </p>
+            </div>
+
+            {/* Prompt */}
+            <div className="space-y-2">
+              <Label htmlFor="qwen2vl-prompt">
+                {t.smolPromptLabel} <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="qwen2vl-prompt"
+                placeholder={language === 'ja' ? 'プロンプトを入力してください（日本語でもOK）例：「この画像を説明してください」' : t.smolPromptPlaceholder}
+                value={customQuery}
+                onChange={(e) => onCustomQueryChange(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                disabled={isProcessing}
+                className="min-h-[80px] bg-background/50 border-input text-foreground placeholder:text-muted-foreground"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && customQuery.trim() && onSendQuery) {
+                    e.preventDefault();
+                    onSendQuery();
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-blue-400 flex items-center gap-1 flex-1">
+                  <Check className="w-3 h-3" />
+                  {language === 'ja' ? '日本語、中国語、韓国語などの多言語に対応' : 'Supports Japanese, Chinese, Korean and more'}
+                </p>
+                <Button
+                  size="sm"
+                  onClick={onSendQuery}
+                  disabled={!customQuery.trim() || isProcessing}
+                  className="flex items-center gap-2 shrink-0"
+                >
+                  <Send className="w-3 h-3" />
+                  {t.actionUpdate}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* SmolVLM Query */}
         {selectedModel === 'smolvlm' && (

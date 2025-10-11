@@ -23,14 +23,18 @@ export interface Translations {
 
   // Model Selection
   aiModel: string;
+  modelQwen2VL: string;
   modelSmolVLM: string;
   modelMoondream: string;
+  modelQwen2VLDesc: string;
   modelSmolVLMDesc: string;
   modelMoondreamDesc: string;
   modelSectionTitle: string;
   modelSelectLabel: string;
+  modelQwen2VLTagline: string;
   modelSmolTagline: string;
   modelMoondreamTagline: string;
+  modelQwen2VLFeatures: string[];
   modelSmolFeatures: string[];
   modelMoondreamFeatures: string[];
   smolRealtimeTitle: string;
@@ -193,14 +197,18 @@ export const translations: Record<Language, Translations> = {
 
     // Model Selection
     aiModel: 'AI Model',
+    modelQwen2VL: 'Qwen2-VL',
     modelSmolVLM: 'SmolVLM',
     modelMoondream: 'Moondream',
+    modelQwen2VLDesc: 'Multilingual Support',
     modelSmolVLMDesc: 'Fast & Efficient',
     modelMoondreamDesc: 'Advanced Features',
     modelSectionTitle: 'AI Model Configuration',
     modelSelectLabel: 'Select Model',
+    modelQwen2VLTagline: 'Native Japanese/Chinese',
     modelSmolTagline: 'Fast & Efficient',
     modelMoondreamTagline: 'Advanced Features',
+    modelQwen2VLFeatures: ['Multilingual (EN/JA/ZH/KO)', 'No translation needed', 'Better multilingual accuracy', 'Moderate speed (800ms-1.5s)'],
     modelSmolFeatures: ['Fast inference', 'Low memory usage', 'Custom queries', 'General purpose captions'],
     modelMoondreamFeatures: ['Custom queries', 'Object detection', 'Detailed captions', 'Point detection'],
     smolRealtimeTitle: 'Real-time inference enabled',
@@ -378,14 +386,18 @@ export const translations: Record<Language, Translations> = {
 
     // Model Selection
     aiModel: 'AIモデル',
+    modelQwen2VL: 'Qwen2-VL',
     modelSmolVLM: 'SmolVLM',
     modelMoondream: 'Moondream',
+    modelQwen2VLDesc: '多言語対応',
     modelSmolVLMDesc: '高速・効率的',
     modelMoondreamDesc: '高度な機能',
     modelSectionTitle: 'AIモデル設定',
     modelSelectLabel: 'モデルを選択',
+    modelQwen2VLTagline: 'ネイティブ日本語・中国語',
     modelSmolTagline: '高速・効率的',
     modelMoondreamTagline: '高度な機能',
+    modelQwen2VLFeatures: ['多言語対応（英/日/中/韓）', '翻訳不要', '多言語精度向上', '中速（800ms-1.5秒）'],
     modelSmolFeatures: ['高速推論', '低メモリ使用量', 'カスタムクエリ対応', '汎用キャプション'],
     modelMoondreamFeatures: ['カスタムクエリ', '物体検出', '詳細なキャプション', '位置推定'],
     smolRealtimeTitle: 'リアルタイム推論が有効',
