@@ -104,6 +104,99 @@ ENV
 npx serve -s dist -p 5173
 ```
 
+### Nginx Reverse Proxy (Production)
+
+For a public deployment, proxy both the API and frontend through Nginx (or your preferred web server) to expose a single HTTPS endpoint.
+
+1. **Install Nginx (Ubuntu)**
+   ```bash
+   sudo apt update
+   sudo apt install nginx -y
+   ```
+
+2. **Copy the frontend build to a web root**
+   ```bash
+   sudo mkdir -p /var/www/vision-frontend
+   sudo cp -r frontend/dist/* /var/www/vision-frontend/
+   ```
+
+3. **Create Nginx site configurations** (e.g. `/etc/nginx/sites-available/vision-frontend` and `/etc/nginx/sites-available/vision-api`)
+
+   *Frontend (`vision.example.com`)*
+   ```nginx
+   server {
+       listen 80;
+       server_name vision.example.com;
+
+       root /var/www/vision-frontend;
+       index index.html;
+
+       location / {
+           try_files $uri $uri/ /index.html;
+       }
+   }
+   ```
+
+   *Backend/API (`api.vision.example.com`)*
+   ```nginx
+   upstream vision_api {
+       server 127.0.0.1:8001;
+   }
+
+   server {
+       listen 80;
+       server_name api.vision.example.com;
+
+       location / {
+           proxy_pass http://vision_api;
+           proxy_http_version 1.1;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+
+       location /ws {
+           proxy_pass http://vision_api/ws;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "upgrade";
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+       }
+   }
+   ```
+
+4. **Enable the sites and reload Nginx**
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/vision-frontend /etc/nginx/sites-enabled/vision-frontend
+   sudo ln -s /etc/nginx/sites-available/vision-api /etc/nginx/sites-enabled/vision-api
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+
+5. **Configure the backend and frontend**
+   ```bash
+   # Backend (update CORS for the frontend domain)
+   export ALLOWED_ORIGINS="https://vision.example.com"
+   python server/main.py
+
+   # Frontend (.env.production)
+   cat <<'ENV' > frontend/.env.production
+   VITE_SERVER_URL=https://api.vision.example.com
+   VITE_WS_URL=wss://api.vision.example.com/ws
+   ENV
+   npm run build
+   ```
+
+6. **Add HTTPS (recommended)**
+   ```bash
+   sudo apt install certbot python3-certbot-nginx -y
+   sudo certbot --nginx -d vision.example.com
+   ```
+
+This configuration terminates TLS at Nginx, serves the static React assets, and proxies API/WebSocket traffic to the FastAPI backend running on the same machine.
+
 ### 6. Access Application
 
 Open your browser and navigate to:

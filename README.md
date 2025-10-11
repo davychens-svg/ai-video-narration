@@ -126,7 +126,9 @@ This starts:
 - Backend (FastAPI) on `http://localhost:8001`
 - Frontend (React) on `http://localhost:3001`
 
-Open `http://localhost:3001` in your browser to use the app.
+When deploying on a remote host, export `ALLOWED_ORIGINS` before running the script and point the frontend to your public API/WebSocket (via `.env` or the in-app **Settings** dialog). See [Configuration (Local & Cloud)](#configuration-local--cloud) for the full variable list.
+
+Open `http://localhost:3001` (or your public domain) in your browser to use the app.
 
 **Option 2: Backend Only**
 
@@ -134,16 +136,18 @@ Open `http://localhost:3001` in your browser to use the app.
 ./run.sh
 # or manually:
 cd server
+export ALLOWED_ORIGINS="https://vision.example.com"
 python main.py
 ```
 
-Server will start on `http://localhost:8001` with a simple HTML interface.
+Server will start on `http://localhost:8001` (or your configured host/port). In cloud deployments, expose the port in your firewall/load balancer and use the public URL in the frontend settings.
 
 **Option 3: Separate Backend + Frontend**
 
 Terminal 1 - Backend:
 ```bash
 cd server
+export ALLOWED_ORIGINS="https://vision.example.com"
 python main.py
 ```
 
@@ -151,7 +155,8 @@ Terminal 2 - Frontend:
 ```bash
 cd frontend
 npm install  # first time only
-npm run dev
+npm run dev   # local testing
+# npm run build  # use after setting VITE_SERVER_URL / VITE_WS_URL for production
 ```
 
 ### Configuration (Local & Cloud)
