@@ -1,23 +1,92 @@
 # Deployment Guide
 
-This comprehensive guide covers deploying the Vision AI Demo application in various environments with step-by-step instructions.
+This guide covers deploying the Vision AI application with platform-specific optimizations.
 
-## Table of Contents
+## Platform-Specific Guides
 
-- [Quick Start](#quick-start)
-- [1. Local Development (macOS)](#1-local-development-macos)
-- [2. Cloud Deployment (Linux + GPU)](#2-cloud-deployment-linux--gpu)
-- [3. Production Best Practices](#3-production-best-practices)
-- [4. Troubleshooting](#4-troubleshooting)
+The application uses different backend strategies for optimal performance on each platform:
+
+### 🖥️ [Mac Deployment Guide](DEPLOYMENT_MAC.md)
+**Recommended for:** Local development on Apple Silicon (M1/M2/M3/M4)
+
+**Backend Strategy:**
+- **SmolVLM**: Uses llama.cpp via llama-server (250-500ms inference with Metal GPU)
+- **Moondream**: Uses PyTorch transformers (1-3s inference with MPS)
+
+**Key Features:**
+- Optimized for Apple Silicon Metal acceleration
+- Hybrid backend with automatic detection
+- Fast inference times for real-time video analysis
+
+### ☁️ [Linux GPU Server Guide](DEPLOYMENT_LINUX.md)
+**Recommended for:** Production deployment on cloud GPU servers
+
+**Backend Strategy:**
+- **SmolVLM**: Uses PyTorch transformers (1-3s inference with CUDA)
+- **Moondream**: Uses PyTorch transformers (1-3s inference with CUDA)
+
+**Key Features:**
+- Simpler deployment (no llama.cpp complexity)
+- NVIDIA GPU support with CUDA
+- Production-ready with systemd and nginx
+- Tested on Linode, AWS, GCP, Azure
 
 ---
 
 ## Quick Start
 
-**Choose your deployment scenario:**
+**Choose your deployment platform:**
 
-- 🖥️ **Local Development** (macOS + Apple Silicon): [Section 1](#1-local-development-macos)
-- ☁️ **Cloud/Production** (Linux + NVIDIA GPU): [Section 2](#2-cloud-deployment-linux--gpu)
+- 🖥️ **macOS (Apple Silicon)**: See [DEPLOYMENT_MAC.md](DEPLOYMENT_MAC.md)
+- ☁️ **Linux (NVIDIA GPU)**: See [DEPLOYMENT_LINUX.md](DEPLOYMENT_LINUX.md)
+
+---
+
+## Architecture Overview
+
+The application automatically detects the available backend via the `/health` endpoint and adjusts accordingly.
+
+### Backend Detection
+
+The backend reports its capabilities:
+```json
+{
+  "status": "ok",
+  "model_loaded": true,
+  "model": "smolvlm",
+  "backend_type": "llamacpp",  // or "transformers"
+  "llamacpp_available": true    // or false
+}
+```
+
+### Frontend Routing Logic
+
+```typescript
+// Moondream always uses transformers (doesn't support llama.cpp)
+// SmolVLM uses detected backend (llamacpp on Mac, transformers on Linux)
+backend={
+  selectedModel === 'moondream'
+    ? 'transformers'
+    : backendType  // from /health endpoint
+}
+```
+
+---
+
+## Legacy General Deployment Instructions
+
+The sections below contain general deployment instructions. For platform-specific optimizations, please refer to the dedicated guides above.
+
+---
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Architecture Overview](#architecture-overview)
+- [1. Local Development (macOS)](#1-local-development-macos)
+- [2. Cloud Deployment (Linux + GPU)](#2-cloud-deployment-linux--gpu)
+- [3. Production Best Practices](#3-production-best-practices)
+- [4. Troubleshooting](#4-troubleshooting)
 
 ---
 
