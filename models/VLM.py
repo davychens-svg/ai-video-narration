@@ -679,6 +679,7 @@ class Qwen2VL(VLMModel):
             )
 
             for raw_response in decoded_candidates:
+                logger.debug("Qwen2-VL raw response candidate: %r", raw_response[:200])
                 cleaned = self._clean_caption(raw_response)
                 if cleaned:
                     return cleaned
@@ -709,9 +710,20 @@ class Qwen2VL(VLMModel):
         cleaned = re.sub(r'([,.，。])\1{1,}', r'\1', cleaned)
         cleaned = cleaned.strip()
 
-        # Remove conversational role prefixes like "assistant:" or "Assistant"
-        cleaned = re.sub(r'^(assistant|user|system)\b[:\s-]*', '', cleaned, flags=re.IGNORECASE)
+        # Remove conversational role prefixes (system/user) that may appear at the start
+        cleaned = re.sub(r'^(assistant|user|system)\b[:：\s-]*', '', cleaned, flags=re.IGNORECASE)
         cleaned = cleaned.strip()
+
+        # If the model echoed an entire chat transcript, keep only the final assistant block
+        role_iter = list(re.finditer(r'(assistant)\b[:：\s-]*', cleaned, flags=re.IGNORECASE))
+        if role_iter:
+            last_role = role_iter[-1]
+            candidate = cleaned[last_role.end():].strip()
+            if candidate:
+                cleaned = candidate
+
+        # Remove lingering leading role tokens again after slicing
+        cleaned = re.sub(r'^(assistant|user|system)\b[:：\s-]*', '', cleaned, flags=re.IGNORECASE).strip()
 
         # Discard strings that are mostly punctuation
         if cleaned and Qwen2VL._is_mostly_punctuation(cleaned):

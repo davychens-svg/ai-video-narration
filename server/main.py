@@ -610,7 +610,7 @@ async def process_frame(params: dict):
         ):
             lowered = effective_user_input.lower()
             if lowered.endswith("?") or any(lowered.startswith(word) for word in QUESTION_WORDS):
-                logger.debug("Auto-switching Qwen2-VL to query mode for prompt: %s", effective_user_input[:100])
+                logger.info("Auto-switching Qwen2-VL to query mode for prompt: %s", effective_user_input[:100])
                 effective_mode = "query"
 
         # Get language from request (default: en)
