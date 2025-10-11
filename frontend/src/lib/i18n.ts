@@ -559,5 +559,6 @@ export function getTranslations(language: Language): Translations {
  */
 export function t(language: Language, key: keyof Translations): string {
   const trans = getTranslations(language);
-  return trans[key] || key;
+  const value = trans[key];
+  return (typeof value === 'string' ? value : key) as string;
 }
