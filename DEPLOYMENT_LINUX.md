@@ -162,19 +162,22 @@ GPU: NVIDIA RTX 4000 Ada Generation
 
 ### 5.3 Configure Backend Environment
 
-Create `server/.env`:
+Create `server/.env` (replace `your.public.ip.or.domain` with your host’s IP or domain):
 
 ```bash
+SERVER_IP=your.public.ip.or.domain
+cat <<ENV > server/.env
 HOST=0.0.0.0
 PORT=8001
 DEFAULT_MODEL=smolvlm
 MODEL_DEVICE=cuda
 MODEL_DTYPE=float16
-ALLOWED_ORIGINS=http://YOUR_SERVER_IP,https://YOUR_SERVER_IP
+ALLOWED_ORIGINS=http://$SERVER_IP,https://$SERVER_IP
 MAX_WORKERS=4
+ENV
 ```
 
-Replace `YOUR_SERVER_IP` with your actual server IP.
+Edit later with `nano server/.env` if you need to tweak origins or ports.
 
 ### 5.4 Test Backend Manually
 
