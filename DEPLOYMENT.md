@@ -29,6 +29,7 @@ The application uses different backend strategies for optimal performance on eac
 - Simpler deployment (no llama.cpp complexity)
 - NVIDIA GPU support with CUDA
 - Production-ready with systemd and nginx
+- **🔐 Password protection with nginx basic authentication**
 - Tested on Linode, AWS, GCP, Azure
 
 ---
@@ -708,11 +709,12 @@ sudo systemctl restart vision-backend
 ### 3.1 Security
 
 1. **Use HTTPS**: Always use SSL/TLS in production
-2. **Firewall**: Only open necessary ports (22, 80, 443)
-3. **SSH Keys**: Disable password authentication, use SSH keys
-4. **Regular Updates**: Keep system and dependencies updated
-5. **User Permissions**: Run services as non-root user
-6. **CORS**: Configure strict CORS origins, avoid wildcards
+2. **Password Protection**: Use nginx basic authentication (see [Linux Guide](DEPLOYMENT_LINUX.md#73-set-up-password-authentication-recommended-for-production))
+3. **Firewall**: Only open necessary ports (22, 80, 443)
+4. **SSH Keys**: Disable password authentication, use SSH keys
+5. **Regular Updates**: Keep system and dependencies updated
+6. **User Permissions**: Run services as non-root user
+7. **CORS**: Configure strict CORS origins, avoid wildcards
 
 ### 3.2 Monitoring
 

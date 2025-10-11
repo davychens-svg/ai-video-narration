@@ -2,6 +2,23 @@
 
 This guide covers deploying the Vision AI application on a Linux GPU server (tested on Ubuntu with NVIDIA GPU).
 
+## 🔐 Security Features
+
+This deployment includes **nginx basic authentication** to protect your application:
+- Password-protected access via browser login dialog
+- Multiple user support with `htpasswd`
+- Easy user management (add/remove/change passwords)
+- Health endpoint accessible without auth for monitoring
+
+**Quick Setup**: After nginx installation, run:
+```bash
+apt install apache2-utils -y
+htpasswd -c /etc/nginx/.htpasswd admin
+# Enter your password when prompted
+```
+
+See [Step 7.3](#73-set-up-password-authentication-recommended-for-production) for complete setup instructions.
+
 ## System Requirements
 
 - Ubuntu 22.04 or higher (or similar Linux distribution)
