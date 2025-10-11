@@ -553,18 +553,43 @@ class Qwen2VL(VLMModel):
         }
         return defaults.get(language, defaults["en"])
 
+    def _detect_language(self, text: Optional[str]) -> Optional[str]:
+        """Heuristic language detection based on character ranges."""
+        if not text:
+            return None
+
+        if re.search(r"[一-龯\u3400-\u4dbf\u4e00-\u9fff]", text):
+            return "zh"
+        if re.search(r"[ぁ-ゟ゠-ヿ]", text):
+            return "ja"
+        if re.search(r"[가-힣ㄱ-ㅎㅏ-ㅣ]", text):
+            return "ko"
+        if re.search(r"[A-Za-z]", text):
+            return "en"
+        return None
+
     def _generate_chat_response(
         self,
         image: Image.Image,
         prompt: str,
-        language: str = "en",
+        response_language: str = "ja",
         max_new_tokens: int = 128,
         min_new_tokens: int = 16,
         use_sampling: bool = False
     ) -> str:
         """Shared helper to run Qwen2-VL chat style inference."""
         try:
-            message_text = prompt or self._default_prompt(language)
+            message_text = prompt or self._default_prompt(response_language)
+
+            language_instructions = {
+                "ja": "日本語で回答してください。",
+                "zh": "请用中文回答。",
+                "ko": "한국어로 대답해 주세요.",
+                "en": None,
+            }
+            instruction = language_instructions.get(response_language)
+            if instruction and instruction not in message_text:
+                message_text = f"{message_text}\n{instruction}"
 
             messages = [
                 {
@@ -686,10 +711,13 @@ class Qwen2VL(VLMModel):
         }
         cfg = length_map.get(response_length, length_map["medium"])
 
+        detected_language = self._detect_language(prompt)
+        target_language = detected_language or "ja"
+
         result = self._generate_chat_response(
             image,
             prompt,
-            language=language,
+            response_language=target_language,
             max_new_tokens=cfg["max"],
             min_new_tokens=cfg["min"],
             use_sampling=cfg["sampling"]
@@ -698,7 +726,7 @@ class Qwen2VL(VLMModel):
             result = self._generate_chat_response(
                 image,
                 None,
-                language=language,
+                response_language=target_language,
                 max_new_tokens=length_map["medium"]["max"],
                 min_new_tokens=length_map["medium"]["min"],
                 use_sampling=True
@@ -729,10 +757,13 @@ class Qwen2VL(VLMModel):
         }
         cfg = length_map.get(response_length, length_map["medium"])
 
+        detected_language = self._detect_language(question_text)
+        target_language = detected_language or language or "ja"
+
         answer = self._generate_chat_response(
             image,
             question_text,
-            language=language,
+            response_language=target_language,
             max_new_tokens=cfg["max"],
             min_new_tokens=cfg["min"],
             use_sampling=cfg["sampling"]
@@ -741,7 +772,7 @@ class Qwen2VL(VLMModel):
             answer = self._generate_chat_response(
                 image,
                 question_text,
-                language=language,
+                response_language=target_language,
                 max_new_tokens=length_map["medium"]["max"],
                 min_new_tokens=length_map["medium"]["min"],
                 use_sampling=True
@@ -883,9 +914,21 @@ class VLMProcessor:
     ) -> Dict[str, Any]:
         """Process with Qwen2VL, SmolVLM or MobileVLM (supports custom queries)"""
 
+        unsupported_modes = {"detection", "point", "mask"}
+        if mode in unsupported_modes and isinstance(self.model, Qwen2VL):
+            message = "Qwen2-VL currently supports caption and query modes only."
+            return {
+                "type": "caption",
+                "caption": message,
+                "mode": "caption",
+                "model": self.current_model_name,
+                "language": self.language
+            }
+
         # Qwen2VL supports caption + query modes with multilingual capability
         if isinstance(self.model, Qwen2VL):
             prompt = user_input if isinstance(user_input, str) and user_input.strip() else None
+            target_language = self.model._detect_language(prompt) or "ja"
 
             if mode == "query":
                 if not prompt:
@@ -901,7 +944,7 @@ class VLMProcessor:
                     self.model.query,
                     image,
                     prompt,
-                    self.language,
+                    target_language,
                     response_length
                 )
 
@@ -911,14 +954,14 @@ class VLMProcessor:
                     "question": prompt,
                     "mode": mode,
                     "model": self.current_model_name,
-                    "language": self.language
+                    "language": target_language
                 }
 
             caption = await asyncio.to_thread(
                 self.model.caption,
                 image,
                 prompt,
-                self.language,
+                target_language,
                 response_length
             )
 
@@ -927,7 +970,7 @@ class VLMProcessor:
                 "caption": caption,
                 "mode": mode,
                 "model": self.current_model_name,
-                "language": self.language
+                "language": target_language
             }
 
         # SmolVLM/MobileVLM require explicit user query
