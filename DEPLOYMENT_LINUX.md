@@ -34,6 +34,7 @@ See [Step 7.3](#73-set-up-password-authentication-recommended-for-production) fo
 
 **Linux deployment uses PyTorch transformers for simplicity:**
 - **SmolVLM**: Uses transformers backend (1-3s inference with CUDA)
+- **Qwen2-VL**: Uses transformers backend for multilingual caption/query
 - **Moondream**: Uses transformers backend (1-3s inference with CUDA)
 - **No llama.cpp**: Simpler deployment, acceptable performance for production
 
@@ -53,6 +54,9 @@ apt update && apt upgrade -y
 ufw allow 22/tcp      # SSH
 ufw allow 80/tcp      # HTTP
 ufw allow 443/tcp     # HTTPS
+ufw allow 3000/tcp    # Frontend (Vite dev server)
+ufw allow 3001/tcp    # Frontend (production build or alternate port)
+ufw allow 8001/tcp    # Backend API/WebSocket
 ufw enable
 ```
 
@@ -437,6 +441,10 @@ In browser console, check health endpoint response:
    - Select "Moondream Advanced Features"
    - Enter custom prompt
    - Should see 1-3s inference times
+
+3. **Test Qwen2-VL (multilingual)**:
+   - Run `RUN_QWEN_TESTS=1 python server/test_models.py` on the server to cache weights and confirm caption/query output
+   - In the UI, switch to "Qwen2-VL Multilingual" and verify backend logs show `/api/process_frame` requests with multilingual responses
 
 ## Troubleshooting
 

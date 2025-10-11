@@ -14,6 +14,7 @@ This guide covers deploying the Vision AI application on macOS with optimized pe
 
 **Mac deployment uses a hybrid backend strategy:**
 - **SmolVLM**: Uses llama.cpp via llama-server (250-500ms inference with Metal GPU)
+- **Qwen2-VL**: Uses PyTorch transformers (multilingual caption/query, no llama.cpp support)
 - **Moondream**: Uses PyTorch transformers (always, as it doesn't support llama.cpp)
 
 The frontend automatically detects which backend is available via the `/health` endpoint.
@@ -170,6 +171,10 @@ Open `http://localhost:3000` and check the browser console. You should see the h
    - Select "Moondream Advanced Features" model
    - Start camera and enter a custom prompt
    - Should see 1-3s inference times (using transformers)
+
+3. **Test Qwen2-VL (multilingual)**:
+   - Run `RUN_QWEN_TESTS=1 python server/test_models.py` once to download weights and verify caption/query output
+   - In the UI, pick "Qwen2-VL Multilingual" and check that captions/answers arrive via the `/api/process_frame` endpoint (see backend logs)
 
 ## Troubleshooting
 

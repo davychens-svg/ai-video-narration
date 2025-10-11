@@ -133,7 +133,7 @@
                         <select id="modeSelect">
                             <option value="caption">Narration</option>
                             <option value="query">Query (Ask Questions)</option>
-                            <option value="detect">Object Detection</option>
+                            <option value="detection">Object Detection</option>
                             <option value="point">Point (Find Objects)</option>
                         </select>
                     </div>
@@ -205,7 +205,7 @@
                 } else if (msg.type === 'query') {
                     resultText.textContent = `Q: ${msg.question}\\nA: ${msg.data}`;
                     latencyStat.textContent = msg.latency_ms.toFixed(1);
-                } else if (msg.type === 'detect' || msg.type === 'point') {
+                } else if (msg.type === 'detection' || msg.type === 'point') {
                     const count = msg.data ? msg.data.length : 0;
                     resultText.textContent = `Found ${count} object(s)`;
                     latencyStat.textContent = msg.latency_ms.toFixed(1);
@@ -271,7 +271,7 @@
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'switch_model', model }));
             }
-            updateModeSelector(model === 'moondream' ? ['caption', 'query', 'detect', 'point'] : ['caption']);
+            updateModeSelector(model === 'moondream' ? ['caption', 'query', 'detection', 'point'] : ['caption']);
         });
 
         modeSelect.addEventListener('change', (e) => {
@@ -280,7 +280,7 @@
             detectControls.classList.remove('active');
 
             if (mode === 'query') queryControls.classList.add('active');
-            else if (mode === 'detect' || mode === 'point') detectControls.classList.add('active');
+            else if (mode === 'detection' || mode === 'point') detectControls.classList.add('active');
 
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'change_mode', mode }));

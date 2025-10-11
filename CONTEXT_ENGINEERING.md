@@ -13,8 +13,9 @@ This document outlines the context engineering strategies and best practices for
 
 **Model Selection Priority:**
 1. **SmolVLM** (primary) - 2B params, ultra-fast, caption only
-2. **Moondream 3.0** (feature-rich) - Advanced capabilities with caption, query, detect, point
-3. **MobileVLM** (backup) - 1.4B params, mobile-optimized
+2. **Qwen2-VL 2B** (multilingual) - Transformer backend shared with Moondream, caption + query
+3. **Moondream 3.0** (feature-rich) - Advanced capabilities with caption, query, detect, point, mask
+4. **MobileVLM** (backup) - 1.4B params, mobile-optimized
 
 ## Table of Contents
 1. [Performance Optimization Strategies](#performance-optimization-strategies)

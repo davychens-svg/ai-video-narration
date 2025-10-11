@@ -531,93 +531,116 @@ class Qwen2VL(VLMModel):
             logger.error(f"Failed to load Qwen2-VL-2B-Instruct: {e}")
             raise
 
-    @torch.inference_mode()
-    def caption(self, image: Image.Image, prompt: str = "Describe this image.", language: str = "en") -> str:
-        """
-        Generate caption with native multilingual support
+    def _default_prompt(self, language: str) -> str:
+        """Return language-aware default caption prompt."""
+        defaults = {
+            "en": "Describe this image briefly.",
+            "ja": "この画像を簡潔に説明してください。",
+            "zh": "简要描述这张图片。",
+            "ko": "이 이미지를 간단히 설명해주세요."
+        }
+        return defaults.get(language, defaults["en"])
 
-        Args:
-            image: PIL Image
-            prompt: User prompt in any supported language
-            language: Language code ('en', 'ja', 'zh', etc.) - used for response formatting
-        """
-        if not self.is_ready:
-            raise RuntimeError("Model not loaded")
-
+    def _generate_chat_response(
+        self,
+        image: Image.Image,
+        prompt: str,
+        language: str = "en",
+        max_new_tokens: int = 128
+    ) -> str:
+        """Shared helper to run Qwen2-VL chat style inference."""
         try:
-            # Default prompts for each language if none provided
-            if not prompt or prompt == "Describe this image.":
-                default_prompts = {
-                    "en": "Describe this image briefly.",
-                    "ja": "この画像を簡潔に説明してください。",
-                    "zh": "简要描述这张图片。"
-                }
-                prompt = default_prompts.get(language, default_prompts["en"])
+            message_text = prompt or self._default_prompt(language)
 
-            # Prepare messages in Qwen2-VL chat format
             messages = [
                 {
                     "role": "user",
                     "content": [
                         {"type": "image", "image": image},
-                        {"type": "text", "text": prompt}
+                        {"type": "text", "text": message_text}
                     ]
                 }
             ]
 
-            # Apply chat template
             text = self.processor.apply_chat_template(
                 messages,
                 tokenize=False,
                 add_generation_prompt=True
             )
 
-            # Process vision info
             image_inputs, video_inputs = process_vision_info(messages)
 
-            # Prepare inputs
             inputs = self.processor(
                 text=[text],
                 images=image_inputs,
                 videos=video_inputs,
                 padding=True,
                 return_tensors="pt"
-            )
-            inputs = inputs.to(self.model.device)
+            ).to(self.model.device)
 
-            # Generate with speed-optimized settings
             output_ids = self.model.generate(
                 **inputs,
-                max_new_tokens=128,      # Reasonable length
-                do_sample=False,         # Deterministic for speed
-                num_beams=1,             # Greedy decoding
-                use_cache=True,          # Enable KV cache
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                num_beams=1,
+                use_cache=True,
                 pad_token_id=self.processor.tokenizer.pad_token_id,
                 eos_token_id=self.processor.tokenizer.eos_token_id,
             )
 
-            # Decode response
-            generated_ids = [
-                output_ids[len(input_ids):]
-                for input_ids, output_ids in zip(inputs.input_ids, output_ids)
-            ]
+            generated = output_ids[:, inputs.input_ids.shape[-1]:]
 
-            caption = self.processor.batch_decode(
-                generated_ids,
+            response = self.processor.batch_decode(
+                generated,
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False
             )[0]
 
-            # Clean up caption
-            caption = caption.strip()
-
-            return caption if caption else "Processing..."
+            return response.strip() or "Processing..."
 
         except Exception as e:
-            logger.error(f"Error generating caption with Qwen2-VL: {e}")
+            logger.error(f"Error generating response with Qwen2-VL: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return "Error processing frame"
+
+    @torch.inference_mode()
+    def caption(
+        self,
+        image: Image.Image,
+        prompt: Optional[str] = None,
+        language: str = "en"
+    ) -> str:
+        """Generate descriptive caption for an image."""
+        if not self.is_ready:
+            raise RuntimeError("Model not loaded")
+
+        return self._generate_chat_response(
+            image,
+            prompt,
+            language=language
+        )
+
+    @torch.inference_mode()
+    def query(
+        self,
+        image: Image.Image,
+        question: str,
+        language: str = "en"
+    ) -> str:
+        """Answer a user question about the image."""
+        if not self.is_ready:
+            raise RuntimeError("Model not loaded")
+
+        question_text = question.strip() if isinstance(question, str) else ""
+        if not question_text:
+            return "Please provide a question to ask about the image."
+
+        return self._generate_chat_response(
+            image,
+            question_text,
+            language=language
+        )
 
 
 class VLMProcessor:
@@ -670,7 +693,7 @@ class VLMProcessor:
     def preprocess_frame(
         self,
         frame: np.ndarray,
-        mode: Literal["caption", "query", "detect", "point", "mask"] = "caption"
+        mode: Literal["caption", "query", "detection", "point", "mask"] = "caption"
     ) -> Tuple[Image.Image, float, float]:
         """
         Preprocess video frame for VLM
@@ -708,7 +731,7 @@ class VLMProcessor:
     async def process_frame(
         self,
         frame: np.ndarray,
-        mode: Literal["caption", "query", "detect", "point", "mask"] = "caption",
+        mode: Literal["caption", "query", "detection", "point", "mask"] = "caption",
         user_input: Optional[str] = None,
         click_coords: Optional[Tuple[int, int]] = None,
         response_length: str = "medium"
@@ -752,16 +775,40 @@ class VLMProcessor:
     ) -> Dict[str, Any]:
         """Process with Qwen2VL, SmolVLM or MobileVLM (supports custom queries)"""
 
-        # Qwen2VL has multilingual support and can handle prompts in any language
+        # Qwen2VL supports caption + query modes with multilingual capability
         if isinstance(self.model, Qwen2VL):
-            # Use user input or default prompt
-            prompt = user_input if user_input and user_input.strip() else None
+            prompt = user_input if isinstance(user_input, str) and user_input.strip() else None
 
-            # Run inference with language parameter
+            if mode == "query":
+                if not prompt:
+                    return {
+                        "type": "caption",
+                        "caption": "Please enter a question to ask about the image.",
+                        "mode": mode,
+                        "model": self.current_model_name,
+                        "language": self.language
+                    }
+
+                answer = await asyncio.to_thread(
+                    self.model.query,
+                    image,
+                    prompt,
+                    self.language
+                )
+
+                return {
+                    "type": "caption",
+                    "caption": answer,
+                    "question": prompt,
+                    "mode": mode,
+                    "model": self.current_model_name,
+                    "language": self.language
+                }
+
             caption = await asyncio.to_thread(
                 self.model.caption,
                 image,
-                prompt if prompt else "Describe this image.",
+                prompt,
                 self.language
             )
 
@@ -1113,7 +1160,9 @@ class VLMProcessor:
     def get_supported_modes(self) -> List[str]:
         """Get list of supported modes for current model"""
         if isinstance(self.model, Moondream):
-            return ["caption", "query", "detect", "point"]
+            return ["caption", "query", "detection", "point", "mask"]
+        if isinstance(self.model, Qwen2VL):
+            return ["caption", "query"]
         else:
             return ["caption"]
 

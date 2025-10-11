@@ -11,6 +11,7 @@ The application uses different backend strategies for optimal performance on eac
 
 **Backend Strategy:**
 - **SmolVLM**: Uses llama.cpp via llama-server (250-500ms inference with Metal GPU)
+- **Qwen2-VL**: Uses PyTorch transformers (multilingual caption/query, same infra as Moondream)
 - **Moondream**: Uses PyTorch transformers (1-3s inference with MPS)
 
 **Key Features:**
@@ -23,6 +24,7 @@ The application uses different backend strategies for optimal performance on eac
 
 **Backend Strategy:**
 - **SmolVLM**: Uses PyTorch transformers (1-3s inference with CUDA)
+- **Qwen2-VL**: Uses PyTorch transformers (multilingual caption/query)
 - **Moondream**: Uses PyTorch transformers (1-3s inference with CUDA)
 
 **Key Features:**
@@ -63,14 +65,28 @@ The backend reports its capabilities:
 ### Frontend Routing Logic
 
 ```typescript
-// Moondream always uses transformers (doesn't support llama.cpp)
+// Moondream and Qwen2-VL always use transformers (llama.cpp unsupported)
 // SmolVLM uses detected backend (llamacpp on Mac, transformers on Linux)
 backend={
-  selectedModel === 'moondream'
+  selectedModel === 'moondream' || selectedModel === 'qwen2vl'
     ? 'transformers'
     : backendType  // from /health endpoint
 }
 ```
+
+### Qwen2-VL Verification Checklist
+
+1. **Smoke test the model**  
+   ```bash
+   RUN_QWEN_TESTS=1 python server/test_models.py
+   ```  
+   The script downloads the Qwen2-VL weights (first run only) and prints both a caption and a query answer so you can confirm multilingual support.
+
+2. **Launch backend + frontend** and select **Qwen2-VL** in the UI.
+
+3. **Confirm transformer routing**  
+   - Backend logs should show requests landing on `/api/process_frame`.  
+   - The captions/answers rendered in the UI should mirror the console output from the smoke test.
 
 ---
 

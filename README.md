@@ -10,7 +10,7 @@ Real-time video analysis with Vision-Language Models
 
 - **Real-time Processing**: <100ms latency per frame (target: 50-70ms)
 - **WebRTC Streaming**: Direct browser-to-server video streaming, no app install needed
-- **Small Models**: Optimized for SmolVLM (500m params) and moondream (1.4B params)
+- **Small Models**: Optimized for SmolVLM (500m params), Qwen2-VL (multilingual), and Moondream (1.4B params)
 - **Live Captions**: Instant AI-generated narration via WebSocket broadcast
 - **Performance Monitoring**: Real-time FPS, latency, and P95 metrics
 - **Model Switching**: Hot-swap between models on the fly
@@ -190,9 +190,10 @@ You can also override URLs on the fly from the **Settings** dialog in the UI—h
 
 1. Open the frontend in your browser (`http://localhost:3000` for Vite dev server or your deployed domain)
 2. Click **Start Camera** or load a video to begin streaming
-3. Pick a model: **SmolVLM** for ultra-fast captions or **Moondream** for advanced features
-4. Watch realtime narration, detections, and points overlay the video feed
-5. Adjust connection details, response length, or detection prompts via **Settings** at any time
+3. Pick a model: **SmolVLM** (ultra-fast), **Qwen2-VL** (multilingual captions + queries), or **Moondream** (advanced detection/point/mask)
+4. When Qwen2-VL is active the frontend automatically stays on the `/api/process_frame` transformer path—perfect for language switching
+5. Watch realtime narration, detections, and points overlay the video feed
+6. Adjust connection details, response length, or detection prompts via **Settings** at any time
 
 ## Architecture
 
@@ -342,6 +343,12 @@ vlm_processor = VLMProcessor(model_name="smolvlm")  # or "mobilevlm"
 cd models
 python VLM.py
 ```
+
+### Qwen2-VL Multilingual Smoke Test
+```bash
+RUN_QWEN_TESTS=1 python server/test_models.py
+```
+This downloads (if needed) the Qwen2-VL weights, then prints both a caption and a query answer so you can confirm the transformer-backed multilingual path is healthy.
 
 ### Running with Debug Logging
 ```bash

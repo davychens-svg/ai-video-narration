@@ -4,6 +4,7 @@ Test script to verify both SmolVLM and Moondream models work correctly
 """
 
 import asyncio
+import os
 import sys
 import logging
 from pathlib import Path
@@ -86,6 +87,50 @@ async def test_moondream():
     return processor
 
 
+async def test_qwen2vl():
+    """Test Qwen2-VL model (requires RUN_QWEN_TESTS=1)"""
+    if os.getenv("RUN_QWEN_TESTS") != "1":
+        logger.info("\n" + "=" * 60)
+        logger.info("Skipping Qwen2-VL test (set RUN_QWEN_TESTS=1 to enable)")
+        logger.info("=" * 60)
+        return None
+
+    logger.info("\n" + "=" * 60)
+    logger.info("Testing Qwen2-VL")
+    logger.info("=" * 60)
+
+    processor = VLMProcessor(model_name="qwen2vl", language="ja")
+
+    # Create dummy frame
+    dummy_frame = np.random.randint(0, 255, (720, 1280, 3), dtype=np.uint8)
+
+    # Test caption mode with default prompt (should auto-detect language)
+    logger.info("Testing Qwen2-VL caption mode (default prompt)...")
+    result = await processor.process_frame(
+        dummy_frame,
+        mode="caption"
+    )
+
+    logger.info(f"Result: {result}")
+    logger.info(f"Caption: {result.get('caption', 'N/A')}")
+    logger.info(f"Model: {result.get('model', 'N/A')}")
+
+    # Test query mode with Japanese question
+    logger.info("\nTesting Qwen2-VL query mode (Japanese prompt)...")
+    question = "この画像には何がありますか？"
+    result = await processor.process_frame(
+        dummy_frame,
+        mode="query",
+        user_input=question
+    )
+
+    logger.info(f"Result: {result}")
+    logger.info(f"Answer: {result.get('caption', 'N/A')}")
+    logger.info(f"Model: {result.get('model', 'N/A')}")
+
+    return processor
+
+
 async def test_model_switching():
     """Test switching between models"""
     logger.info("\n" + "=" * 60)
@@ -135,6 +180,7 @@ async def main():
     try:
         # Test individual models
         await test_smolvlm()
+        await test_qwen2vl()
         await test_moondream()
 
         # Test model switching
