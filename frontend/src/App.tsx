@@ -405,7 +405,11 @@ export default function App() {
                       ? 'mask'
                       : 'none'
                   }
-                  backend={backendType}
+                  backend={
+                    selectedModel === 'moondream'
+                      ? 'transformers'  // Moondream always uses transformers
+                      : backendType     // SmolVLM uses detected backend (llamacpp on Mac, transformers on Linux)
+                  }
                   prompt={customQuery}
                   modelReady={modelReady}
                   responseLength={settings.responseLength}
