@@ -709,12 +709,16 @@ class Qwen2VL(VLMModel):
         cleaned = re.sub(r'([,.，。])\1{1,}', r'\1', cleaned)
         cleaned = cleaned.strip()
 
+        # Remove conversational role prefixes like "assistant:" or "Assistant"
+        cleaned = re.sub(r'^(assistant|user|system)\b[:\s-]*', '', cleaned, flags=re.IGNORECASE)
+        cleaned = cleaned.strip()
+
         # Discard strings that are mostly punctuation
         if cleaned and Qwen2VL._is_mostly_punctuation(cleaned):
             return ""
 
-        # Require at least one alphabetic character (covers Latin, CJK, etc.) to avoid pure symbol/number outputs
-        if cleaned and not any(ch.isalpha() for ch in cleaned):
+        # Require at least one alphabetic/ideographic character to avoid pure symbols/numbers
+        if cleaned and not re.search(r'[A-Za-z一-龯\u3400-\u4dbf\u4e00-\u9fffぁ-ゟ゠-ヿ가-힣]', cleaned):
             return ""
 
         return cleaned
