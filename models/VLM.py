@@ -568,8 +568,13 @@ class Qwen2VL(VLMModel):
         }
         return defaults.get(language, defaults["en"])
 
-    def _ensure_processor(self):
-        """Reinitialize processor if it was cleared during model unload."""
+    def _ensure_ready(self):
+        """Ensure both model and processor handles exist before inference."""
+        if self.model is None:
+            logger.warning("Qwen2-VL model missing; reloading weights.")
+            self.load()
+            return
+
         if self.processor is None:
             logger.warning("Qwen2-VL processor missing; reinitializing processor.")
             self.processor = AutoProcessor.from_pretrained(
@@ -603,7 +608,7 @@ class Qwen2VL(VLMModel):
     ) -> str:
         """Shared helper to run Qwen2-VL chat style inference."""
         try:
-            self._ensure_processor()
+            self._ensure_ready()
 
             message_text = prompt or self._default_prompt(response_language)
 
