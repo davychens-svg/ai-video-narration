@@ -143,88 +143,140 @@ class SmolVLM(VLMModel):
         Returns:
             str if stream=False, Generator[str] if stream=True
         """
+        if stream:
+            # Return generator for streaming
+            return self._caption_stream(image, prompt, max_new_tokens)
+        else:
+            # Return string for non-streaming
+            return self._caption_no_stream(image, prompt, max_new_tokens)
+
+    def _caption_stream(self, image: Image.Image, prompt: str, max_new_tokens: int):
+        """Internal streaming implementation (generator)"""
+        if not self.is_ready:
+            yield "Error: Model not loaded"
+            return
+
+        try:
+            target_tokens = int(max(4, min(max_new_tokens, 128)))
+
+            # SmolVLM uses chat template format (as per HF documentation)
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": prompt}
+                    ]
+                }
+            ]
+
+            # Apply chat template
+            text_prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True)
+
+            # Preprocess
+            inputs = self.processor(
+                text=text_prompt,
+                images=[image],
+                return_tensors="pt"
+            ).to(self.model.device)
+
+            # Streaming generation using TextIteratorStreamer
+            from transformers import TextIteratorStreamer
+            from threading import Thread
+
+            streamer = TextIteratorStreamer(
+                self.processor.tokenizer,
+                skip_special_tokens=True,
+                skip_prompt=True
+            )
+
+            # Run generation in a separate thread so we can yield tokens
+            generation_kwargs = dict(
+                inputs,
+                max_new_tokens=target_tokens,
+                min_new_tokens=3,
+                do_sample=False,
+                num_beams=1,
+                repetition_penalty=1.2,
+                pad_token_id=self.processor.tokenizer.pad_token_id,
+                eos_token_id=self.processor.tokenizer.eos_token_id,
+                use_cache=True,
+                streamer=streamer,
+            )
+
+            thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+            thread.start()
+
+            # Yield tokens as they're generated
+            full_text = ""
+            for new_text in streamer:
+                cleaned = self._clean_caption_chunk(new_text)
+                if cleaned:
+                    full_text += cleaned
+                    yield cleaned
+
+            thread.join()
+
+            # Final cleanup on complete text
+            if full_text:
+                final_cleaned = self._clean_caption_full(full_text, text_prompt, prompt)
+                if final_cleaned != full_text:
+                    yield "\n[FINAL]" + final_cleaned
+
+        except Exception as e:
+            logger.error(f"Error generating caption: {e}")
+            yield "Error processing frame"
+
+    def _caption_no_stream(self, image: Image.Image, prompt: str, max_new_tokens: int) -> str:
+        """Internal non-streaming implementation (returns string)"""
         if not self.is_ready:
             raise RuntimeError("Model not loaded")
 
         try:
             target_tokens = int(max(4, min(max_new_tokens, 128)))
 
-            # SmolVLM requires special image token in text
-            # Format: "<image>prompt"
-            text_with_image = f"<image>{prompt}"
+            # SmolVLM uses chat template format (as per HF documentation)
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": prompt}
+                    ]
+                }
+            ]
+
+            # Apply chat template
+            text_prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True)
 
             # Preprocess
             inputs = self.processor(
-                text=text_with_image,
-                images=image,
+                text=text_prompt,
+                images=[image],
                 return_tensors="pt"
             ).to(self.model.device)
 
-            if stream:
-                # Streaming generation using TextIteratorStreamer
-                from transformers import TextIteratorStreamer
-                from threading import Thread
+            # Non-streaming generation (original behavior)
+            output = self.model.generate(
+                **inputs,
+                max_new_tokens=target_tokens,
+                min_new_tokens=3,       # At least 3 tokens
+                do_sample=False,        # Greedy decoding (fastest)
+                num_beams=1,            # No beam search
+                repetition_penalty=1.2, # Prevent repetition
+                pad_token_id=self.processor.tokenizer.pad_token_id,
+                eos_token_id=self.processor.tokenizer.eos_token_id,
+                use_cache=True,         # Enable KV cache
+            )
 
-                streamer = TextIteratorStreamer(
-                    self.processor.tokenizer,
-                    skip_special_tokens=True,
-                    skip_prompt=True
-                )
-
-                # Run generation in a separate thread so we can yield tokens
-                generation_kwargs = dict(
-                    inputs,
-                    max_new_tokens=target_tokens,
-                    min_new_tokens=3,
-                    do_sample=False,
-                    num_beams=1,
-                    repetition_penalty=1.2,
-                    pad_token_id=self.processor.tokenizer.pad_token_id,
-                    eos_token_id=self.processor.tokenizer.eos_token_id,
-                    use_cache=True,
-                    streamer=streamer,
-                )
-
-                thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
-                thread.start()
-
-                # Yield tokens as they're generated
-                full_text = ""
-                for new_text in streamer:
-                    cleaned = self._clean_caption_chunk(new_text)
-                    if cleaned:
-                        full_text += cleaned
-                        yield cleaned
-
-                thread.join()
-
-                # Final cleanup on complete text
-                if full_text:
-                    yield "\n[FINAL]" + self._clean_caption_full(full_text, text_with_image, prompt)
-            else:
-                # Non-streaming generation (original behavior)
-                output = self.model.generate(
-                    **inputs,
-                    max_new_tokens=target_tokens,
-                    min_new_tokens=3,       # At least 3 tokens
-                    do_sample=False,        # Greedy decoding (fastest)
-                    num_beams=1,            # No beam search
-                    repetition_penalty=1.2, # Prevent repetition
-                    pad_token_id=self.processor.tokenizer.pad_token_id,
-                    eos_token_id=self.processor.tokenizer.eos_token_id,
-                    use_cache=True,         # Enable KV cache
-                )
-
-                # Decode
-                caption = self.processor.decode(output[0], skip_special_tokens=True)
-                return self._clean_caption_full(caption, text_with_image, prompt)
+            # Decode
+            generated_ids_trimmed = output[0][inputs.input_ids.shape[-1]:]
+            caption = self.processor.decode(generated_ids_trimmed, skip_special_tokens=True)
+            return self._clean_caption_full(caption, text_prompt, prompt)
 
         except Exception as e:
             logger.error(f"Error generating caption: {e}")
-            if stream:
-                yield "Error processing frame"
-            else:
-                return "Error processing frame"
+            return "Error processing frame"
 
     def _clean_caption_chunk(self, chunk: str) -> str:
         """Clean a single chunk of streaming caption"""
@@ -233,15 +285,18 @@ class SmolVLM(VLMModel):
         chunk = re.sub(r'<[^>]+>', '', chunk)
         return chunk
 
-    def _clean_caption_full(self, caption: str, text_with_image: str, prompt: str) -> str:
+    def _clean_caption_full(self, caption: str, text_prompt: str, original_prompt: str) -> str:
         """Clean the full caption after generation"""
         import re
 
-        # Remove the input prompt (including <image> token)
-        caption = caption.replace(text_with_image, "").replace(prompt, "").strip()
+        # Remove the input prompt
+        caption = caption.replace(text_prompt, "").replace(original_prompt, "").strip()
 
         # Remove SmolVLM special tokens (row/col indicators, global-img, etc.)
         caption = re.sub(r'<[^>]+>', '', caption)
+
+        # Remove role prefixes from chat template
+        caption = re.sub(r'^(User|Assistant|System)\s*:?\s*', '', caption, flags=re.IGNORECASE)
 
         # Remove common SmolVLM artifacts and incomplete sentences
         # Remove phrases like "in the image.", "The image shows", etc.
@@ -394,6 +449,60 @@ class Moondream(VLMModel):
         Returns:
             str if stream=False, Generator[str] if stream=True
         """
+        if stream:
+            return self._caption_stream(image, length)
+        else:
+            return self._caption_no_stream(image, length)
+
+    def _caption_stream(self, image: Image.Image, length: Literal["short", "normal", "long"]):
+        """Internal streaming implementation (generator)"""
+        if not self.is_ready:
+            yield "Error: Model not loaded"
+            return
+
+        try:
+            # Encode image
+            enc_image = self.model.encode_image(image)
+
+            # Moondream's caption method returns a dict with streaming support
+            if hasattr(self.model, 'caption') and callable(getattr(self.model, 'caption')):
+                # Use Moondream's native caption API
+                result = self.model.caption(enc_image, length=length, stream=True)
+
+                # Check if streaming is supported (returns generator)
+                if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
+                    # Streaming mode - iterate through chunks
+                    for chunk in result:
+                        if isinstance(chunk, dict) and 'caption' in chunk:
+                            yield chunk['caption']
+                        elif isinstance(chunk, str):
+                            yield chunk
+                else:
+                    # Fallback: return complete result
+                    if isinstance(result, dict) and 'caption' in result:
+                        yield result['caption']
+                    else:
+                        yield str(result)
+            else:
+                # Fallback: use answer_question API (older method)
+                prompts = {
+                    "short": "Describe this image in a single concise sentence.",
+                    "normal": "Describe this image in detail.",
+                    "long": "Provide an in-depth, multi-sentence description of this image."
+                }
+                question = prompts.get(length, prompts["normal"])
+                answer = self.model.answer_question(enc_image, question, self.tokenizer)
+                if isinstance(answer, dict) and 'answer' in answer:
+                    yield answer['answer']
+                else:
+                    yield answer if answer else "No description available"
+
+        except Exception as e:
+            logger.error(f"Error generating caption: {e}")
+            yield "Error processing frame"
+
+    def _caption_no_stream(self, image: Image.Image, length: Literal["short", "normal", "long"]) -> str:
+        """Internal non-streaming implementation (returns string)"""
         if not self.is_ready:
             raise RuntimeError("Model not loaded")
 
@@ -401,68 +510,21 @@ class Moondream(VLMModel):
             # Encode image
             enc_image = self.model.encode_image(image)
 
-            # Generate caption
-            prompts = {
-                "short": "Describe this image in a single concise sentence.",
-                "normal": "Describe this image in detail.",
-                "long": "Provide an in-depth, multi-sentence description of this image."
-            }
-            question = prompts.get(length, prompts["normal"])
+            # Moondream's caption returns a dict: {"caption": "text"}
+            result = self.model.caption(enc_image, length=length)
 
-            if stream:
-                # Check if model supports streaming
-                if hasattr(self.model, 'answer_question_stream'):
-                    # Use native streaming if available
-                    for chunk in self.model.answer_question_stream(enc_image, question, self.tokenizer):
-                        yield chunk
-                else:
-                    # Fallback: manual streaming with TextIteratorStreamer
-                    from transformers import TextIteratorStreamer
-                    from threading import Thread
-
-                    # Prepare inputs for generation
-                    prompt_text = f"Question: {question}\n\nAnswer:"
-                    inputs = self.tokenizer(prompt_text, return_tensors="pt").to(self.model.device)
-
-                    streamer = TextIteratorStreamer(
-                        self.tokenizer,
-                        skip_special_tokens=True,
-                        skip_prompt=True
-                    )
-
-                    generation_kwargs = dict(
-                        inputs,
-                        enc_image=enc_image,  # Pass encoded image
-                        max_new_tokens=150,
-                        temperature=0.5,
-                        top_p=0.3,
-                        streamer=streamer,
-                    )
-
-                    thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
-                    thread.start()
-
-                    # Yield tokens as they come
-                    for text_chunk in streamer:
-                        if text_chunk:
-                            yield text_chunk
-
-                    thread.join()
+            if isinstance(result, dict) and 'caption' in result:
+                caption = result['caption']
+            elif isinstance(result, str):
+                caption = result
             else:
-                # Non-streaming (original behavior)
-                caption = self.model.answer_question(
-                    enc_image,
-                    question,
-                    self.tokenizer
-                )
-                return caption if caption else "No description available"
+                caption = str(result)
+
+            return caption if caption else "No description available"
 
         except Exception as e:
             logger.error(f"Error generating caption: {e}")
-            if stream:
-                yield "Error processing frame"
-            else:
-                return "Error processing frame"
+            return "Error processing frame"
 
     @torch.inference_mode()
     def query(
@@ -483,6 +545,53 @@ class Moondream(VLMModel):
         Returns:
             str if stream=False, Generator[str] if stream=True
         """
+        if stream:
+            return self._query_stream(image, question, reasoning)
+        else:
+            return self._query_no_stream(image, question, reasoning)
+
+    def _query_stream(self, image: Image.Image, question: str, reasoning: bool):
+        """Internal streaming implementation (generator)"""
+        if not self.is_ready:
+            yield "Error: Model not loaded"
+            return
+
+        try:
+            # Encode image
+            enc_image = self.model.encode_image(image)
+
+            # Check if model supports streaming
+            if hasattr(self.model, 'query') and callable(getattr(self.model, 'query')):
+                # Use Moondream's native query API
+                result = self.model.query(enc_image, question)
+
+                # Check if result is a generator (streaming)
+                if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
+                    for chunk in result:
+                        if isinstance(chunk, dict) and 'answer' in chunk:
+                            yield chunk['answer']
+                        elif isinstance(chunk, str):
+                            yield chunk
+                else:
+                    # Non-generator result
+                    if isinstance(result, dict) and 'answer' in result:
+                        yield result['answer']
+                    else:
+                        yield str(result) if result else "Unable to answer"
+            else:
+                # Fallback: use answer_question (older API)
+                result = self.model.answer_question(enc_image, question, self.tokenizer)
+                if isinstance(result, dict) and 'answer' in result:
+                    yield result['answer']
+                else:
+                    yield result if result else "Unable to answer"
+
+        except Exception as e:
+            logger.error(f"Error processing query: {e}")
+            yield f"Error: {str(e)}"
+
+    def _query_no_stream(self, image: Image.Image, question: str, reasoning: bool) -> str:
+        """Internal non-streaming implementation (returns string)"""
         if not self.is_ready:
             raise RuntimeError("Model not loaded")
 
@@ -490,31 +599,21 @@ class Moondream(VLMModel):
             # Encode image
             enc_image = self.model.encode_image(image)
 
-            if stream:
-                # Check if model supports streaming
-                if hasattr(self.model, 'answer_question_stream'):
-                    # Use native streaming if available
-                    for chunk in self.model.answer_question_stream(enc_image, question, self.tokenizer):
-                        yield chunk
-                else:
-                    # Fallback: use non-streaming and yield complete answer
-                    answer = self.model.answer_question(enc_image, question, self.tokenizer)
-                    yield answer if answer else "Unable to answer"
+            # Moondream's query returns a dict: {"answer": "text"}
+            result = self.model.query(enc_image, question)
+
+            if isinstance(result, dict) and 'answer' in result:
+                answer = result['answer']
+            elif isinstance(result, str):
+                answer = result
             else:
-                # Non-streaming (original behavior)
-                answer = self.model.answer_question(
-                    enc_image,
-                    question,
-                    self.tokenizer
-                )
-                return answer if answer else "Unable to answer"
+                answer = str(result)
+
+            return answer if answer else "Unable to answer"
 
         except Exception as e:
             logger.error(f"Error processing query: {e}")
-            if stream:
-                yield f"Error: {str(e)}"
-            else:
-                return f"Error: {str(e)}"
+            return f"Error: {str(e)}"
 
     @torch.inference_mode()
     def detect(
@@ -754,6 +853,25 @@ class Qwen2VL(VLMModel):
         Returns:
             str if stream=False, Generator[str] if stream=True
         """
+        if stream:
+            return self._generate_chat_response_stream(
+                image, prompt, response_language, max_new_tokens, min_new_tokens, use_sampling
+            )
+        else:
+            return self._generate_chat_response_no_stream(
+                image, prompt, response_language, max_new_tokens, min_new_tokens, use_sampling
+            )
+
+    def _generate_chat_response_stream(
+        self,
+        image: Image.Image,
+        prompt: str,
+        response_language: str,
+        max_new_tokens: int,
+        min_new_tokens: int,
+        use_sampling: bool
+    ):
+        """Internal streaming implementation (generator)"""
         try:
             self._ensure_ready()
 
@@ -818,87 +936,163 @@ class Qwen2VL(VLMModel):
                     "do_sample": False,
                 })
 
-            if stream:
-                # Streaming generation
-                from transformers import TextIteratorStreamer
-                from threading import Thread
+            # Streaming generation
+            from transformers import TextIteratorStreamer
+            from threading import Thread
 
-                streamer = TextIteratorStreamer(
-                    self.processor.tokenizer,
-                    skip_special_tokens=True,
-                    skip_prompt=True
-                )
+            streamer = TextIteratorStreamer(
+                self.processor.tokenizer,
+                skip_special_tokens=True,
+                skip_prompt=True
+            )
 
-                generate_kwargs["streamer"] = streamer
+            generate_kwargs["streamer"] = streamer
 
-                # Run generation in a separate thread
-                thread = Thread(target=self.model.generate, kwargs=dict(inputs, **generate_kwargs))
-                thread.start()
+            # Run generation in a separate thread
+            thread = Thread(target=self.model.generate, kwargs=dict(inputs, **generate_kwargs))
+            thread.start()
 
-                # Yield tokens as they're generated
-                full_text = ""
-                for new_text in streamer:
-                    if new_text:
-                        full_text += new_text
-                        # Clean and yield chunk
-                        cleaned = self._clean_caption(new_text)
-                        if cleaned:
-                            yield cleaned
-
-                thread.join()
-
-                # Final cleanup on complete text
-                if full_text:
-                    final_cleaned = self._clean_caption(full_text)
-                    if final_cleaned and final_cleaned != full_text:
-                        # If final cleanup produces something different, yield a final marker
-                        yield "\n[FINAL]" + final_cleaned
-            else:
-                # Non-streaming generation (original behavior)
-                output_ids = self.model.generate(
-                    **inputs,
-                    **generate_kwargs
-                )
-
-                generated = output_ids[:, inputs.input_ids.shape[-1]:]
-
-                decoded_candidates: List[str] = []
-
-                if generated.size(-1) > 0:
-                    decoded_candidates.append(
-                        self.processor.batch_decode(
-                            generated,
-                            skip_special_tokens=True,
-                            clean_up_tokenization_spaces=False
-                        )[0]
-                    )
-
-                # Always fall back to decoding the full sequence in case slicing removed everything
-                decoded_candidates.append(
-                    self.processor.batch_decode(
-                        output_ids,
-                        skip_special_tokens=True,
-                        clean_up_tokenization_spaces=False
-                    )[0]
-                )
-
-                for raw_response in decoded_candidates:
-                    logger.debug("Qwen2-VL raw response candidate: %r", raw_response[:200])
-                    cleaned = self._clean_caption(raw_response)
+            # Yield tokens as they're generated
+            full_text = ""
+            for new_text in streamer:
+                if new_text:
+                    full_text += new_text
+                    # Clean and yield chunk
+                    cleaned = self._clean_caption(new_text)
                     if cleaned:
-                        return cleaned
+                        yield cleaned
 
-                logger.warning("Qwen2-VL returned empty caption after decoding attempts.")
-                return "Unable to describe the image."
+            thread.join()
+
+            # Final cleanup on complete text
+            if full_text:
+                final_cleaned = self._clean_caption(full_text)
+                if final_cleaned and final_cleaned != full_text:
+                    # If final cleanup produces something different, yield a final marker
+                    yield "\n[FINAL]" + final_cleaned
 
         except Exception as e:
             logger.error(f"Error generating response with Qwen2-VL: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            if stream:
-                yield "Error processing frame"
+            yield "Error processing frame"
+
+    def _generate_chat_response_no_stream(
+        self,
+        image: Image.Image,
+        prompt: str,
+        response_language: str,
+        max_new_tokens: int,
+        min_new_tokens: int,
+        use_sampling: bool
+    ) -> str:
+        """Internal non-streaming implementation (returns string)"""
+        try:
+            self._ensure_ready()
+
+            message_text = prompt or self._default_prompt(response_language)
+
+            language_instructions = {
+                "ja": "日本語で回答してください。",
+                "zh": "请用中文回答。",
+                "ko": "한국어로 대답해 주세요.",
+                "en": None,
+            }
+            instruction = language_instructions.get(response_language)
+            if instruction and instruction not in message_text:
+                message_text = f"{message_text}\n{instruction}"
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": image},
+                        {"type": "text", "text": message_text}
+                    ]
+                }
+            ]
+
+            text = self.processor.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+
+            image_inputs, video_inputs = process_vision_info(messages)
+
+            inputs = self.processor(
+                text=[text],
+                images=image_inputs,
+                videos=video_inputs,
+                padding=True,
+                return_tensors="pt"
+            ).to(self.model.device)
+
+            generate_kwargs = {
+                "max_new_tokens": max_new_tokens,
+                "min_new_tokens": min_new_tokens,
+                "use_cache": True,
+                "repetition_penalty": 1.05,
+                "no_repeat_ngram_size": 4,
+                "pad_token_id": self.processor.tokenizer.pad_token_id,
+                "eos_token_id": self.processor.tokenizer.eos_token_id,
+                "num_beams": 1,
+            }
+
+            if use_sampling:
+                generate_kwargs.update({
+                    "do_sample": True,
+                    "top_p": 0.8,
+                    "temperature": 0.7,
+                    "top_k": 50,
+                })
             else:
-                return "Error processing frame"
+                generate_kwargs.update({
+                    "do_sample": False,
+                })
+
+            # Non-streaming generation (original behavior)
+            output_ids = self.model.generate(
+                **inputs,
+                **generate_kwargs
+            )
+
+            generated = output_ids[:, inputs.input_ids.shape[-1]:]
+
+            decoded_candidates: List[str] = []
+
+            if generated.size(-1) > 0:
+                decoded_candidates.append(
+                    self.processor.batch_decode(
+                        generated,
+                        skip_special_tokens=True,
+                        clean_up_tokenization_spaces=False
+                    )[0]
+                )
+
+            # Always fall back to decoding the full sequence in case slicing removed everything
+            decoded_candidates.append(
+                self.processor.batch_decode(
+                    output_ids,
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=False
+                )[0]
+            )
+
+            for raw_response in decoded_candidates:
+                logger.debug("Qwen2-VL raw response candidate: %r", raw_response[:200])
+                cleaned = self._clean_caption(raw_response)
+                if cleaned:
+                    return cleaned
+
+            logger.warning("Qwen2-VL returned empty caption after decoding attempts.")
+            return "Unable to describe the image."
+
+        except Exception as e:
+            logger.error(f"Error generating response with Qwen2-VL: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return "Error processing frame"
 
     @staticmethod
     def _clean_caption(text: str) -> str:
@@ -970,6 +1164,48 @@ class Qwen2VL(VLMModel):
         Returns:
             str if stream=False, Generator[str] if stream=True
         """
+        if stream:
+            return self._caption_stream(image, prompt, language, response_length)
+        else:
+            return self._caption_no_stream(image, prompt, language, response_length)
+
+    def _caption_stream(self, image: Image.Image, prompt: Optional[str], language: str, response_length: str):
+        """Internal streaming implementation"""
+        if not self.is_ready:
+            yield "Error: Model not loaded"
+            return
+
+        length_map = {
+            "short": {"max": 64, "min": 8, "sampling": True},
+            "medium": {"max": 128, "min": 16, "sampling": True},
+            "long": {"max": 256, "min": 24, "sampling": True},
+        }
+        cfg = length_map.get(response_length, length_map["medium"])
+
+        detected_language = self._detect_language(prompt)
+        target_language = detected_language or language or "en"
+
+        attempt = {
+            "prompt": prompt,
+            "response_language": target_language,
+            "max_new_tokens": cfg["max"],
+            "min_new_tokens": cfg["min"],
+            "use_sampling": cfg["sampling"],
+        }
+
+        for chunk in self._generate_chat_response(
+            image,
+            attempt["prompt"],
+            response_language=attempt["response_language"],
+            max_new_tokens=attempt["max_new_tokens"],
+            min_new_tokens=attempt["min_new_tokens"],
+            use_sampling=attempt["use_sampling"],
+            stream=True
+        ):
+            yield chunk
+
+    def _caption_no_stream(self, image: Image.Image, prompt: Optional[str], language: str, response_length: str) -> str:
+        """Internal non-streaming implementation"""
         if not self.is_ready:
             raise RuntimeError("Model not loaded")
 
@@ -1007,38 +1243,23 @@ class Qwen2VL(VLMModel):
             },
         ]
 
-        if stream:
-            # For streaming, only try the first attempt
-            attempt = attempts[0]
-            for chunk in self._generate_chat_response(
+        for attempt_idx, attempt in enumerate(attempts, start=1):
+            result = self._generate_chat_response(
                 image,
                 attempt["prompt"],
                 response_language=attempt["response_language"],
                 max_new_tokens=attempt["max_new_tokens"],
                 min_new_tokens=attempt["min_new_tokens"],
                 use_sampling=attempt["use_sampling"],
-                stream=True
-            ):
-                yield chunk
-        else:
-            # For non-streaming, try all attempts with fallbacks
-            for attempt_idx, attempt in enumerate(attempts, start=1):
-                result = self._generate_chat_response(
-                    image,
-                    attempt["prompt"],
-                    response_language=attempt["response_language"],
-                    max_new_tokens=attempt["max_new_tokens"],
-                    min_new_tokens=attempt["min_new_tokens"],
-                    use_sampling=attempt["use_sampling"],
-                    stream=False
-                )
-                if result and result.strip():
-                    if attempt_idx > 1:
-                        logger.debug(f"Qwen2-VL caption succeeded on retry attempt {attempt_idx}.")
-                    return result
+                stream=False
+            )
+            if result and result.strip():
+                if attempt_idx > 1:
+                    logger.debug(f"Qwen2-VL caption succeeded on retry attempt {attempt_idx}.")
+                return result
 
-            logger.warning("Qwen2-VL caption failed to produce meaningful text after retries.")
-            return "Unable to describe the image."
+        logger.warning("Qwen2-VL caption failed to produce meaningful text after retries.")
+        return "Unable to describe the image."
 
     @torch.inference_mode()
     def query(
@@ -1061,16 +1282,60 @@ class Qwen2VL(VLMModel):
         Returns:
             str if stream=False, Generator[str] if stream=True
         """
+        if stream:
+            return self._query_stream(image, question, language, response_length)
+        else:
+            return self._query_no_stream(image, question, language, response_length)
+
+    def _query_stream(self, image: Image.Image, question: str, language: str, response_length: str):
+        """Internal streaming implementation (generator)"""
+        if not self.is_ready:
+            yield "Error: Model not loaded"
+            return
+
+        question_text = question.strip() if isinstance(question, str) else ""
+        if not question_text:
+            yield "Please provide a question to ask about the image."
+            return
+
+        length_map = {
+            "short": {"max": 72, "min": 8, "sampling": True},
+            "medium": {"max": 144, "min": 16, "sampling": True},
+            "long": {"max": 256, "min": 24, "sampling": True},
+        }
+        cfg = length_map.get(response_length, length_map["medium"])
+
+        detected_language = self._detect_language(question_text)
+        target_language = detected_language or language or "en"
+
+        # For streaming, only try the first attempt
+        attempt = {
+            "prompt": question_text,
+            "response_language": target_language,
+            "max_new_tokens": cfg["max"],
+            "min_new_tokens": cfg["min"],
+            "use_sampling": cfg["sampling"],
+        }
+
+        for chunk in self._generate_chat_response(
+            image,
+            attempt["prompt"],
+            response_language=attempt["response_language"],
+            max_new_tokens=attempt["max_new_tokens"],
+            min_new_tokens=attempt["min_new_tokens"],
+            use_sampling=attempt["use_sampling"],
+            stream=True
+        ):
+            yield chunk
+
+    def _query_no_stream(self, image: Image.Image, question: str, language: str, response_length: str) -> str:
+        """Internal non-streaming implementation (returns string)"""
         if not self.is_ready:
             raise RuntimeError("Model not loaded")
 
         question_text = question.strip() if isinstance(question, str) else ""
         if not question_text:
-            if stream:
-                yield "Please provide a question to ask about the image."
-                return
-            else:
-                return "Please provide a question to ask about the image."
+            return "Please provide a question to ask about the image."
 
         length_map = {
             "short": {"max": 72, "min": 8, "sampling": True},
@@ -1110,38 +1375,24 @@ class Qwen2VL(VLMModel):
                 }
             )
 
-        if stream:
-            # For streaming, only try the first attempt
-            attempt = attempts[0]
-            for chunk in self._generate_chat_response(
+        # For non-streaming, try all attempts with fallbacks
+        for attempt_idx, attempt in enumerate(attempts, start=1):
+            answer = self._generate_chat_response(
                 image,
                 attempt["prompt"],
                 response_language=attempt["response_language"],
                 max_new_tokens=attempt["max_new_tokens"],
                 min_new_tokens=attempt["min_new_tokens"],
                 use_sampling=attempt["use_sampling"],
-                stream=True
-            ):
-                yield chunk
-        else:
-            # For non-streaming, try all attempts with fallbacks
-            for attempt_idx, attempt in enumerate(attempts, start=1):
-                answer = self._generate_chat_response(
-                    image,
-                    attempt["prompt"],
-                    response_language=attempt["response_language"],
-                    max_new_tokens=attempt["max_new_tokens"],
-                    min_new_tokens=attempt["min_new_tokens"],
-                    use_sampling=attempt["use_sampling"],
-                    stream=False
-                )
-                if answer and answer.strip():
-                    if attempt_idx > 1:
-                        logger.debug(f"Qwen2-VL query succeeded on retry attempt {attempt_idx}.")
-                    return answer
+                stream=False
+            )
+            if answer and answer.strip():
+                if attempt_idx > 1:
+                    logger.debug(f"Qwen2-VL query succeeded on retry attempt {attempt_idx}.")
+                return answer
 
-            logger.warning("Qwen2-VL query failed to produce meaningful text after retries.")
-            return "Unable to answer right now."
+        logger.warning("Qwen2-VL query failed to produce meaningful text after retries.")
+        return "Unable to answer right now."
 
 
 class VLMProcessor:
