@@ -494,7 +494,15 @@ class Qwen2VL(VLMModel):
                 dtype = torch.float16
                 device_map = "auto"
                 # Use flash_attention_2 for speed on Ampere+ GPUs
-                attn_implementation = "flash_attention_2"
+                try:
+                    import flash_attn  # type: ignore  # noqa: F401
+                    attn_implementation = "flash_attention_2"
+                except ImportError:
+                    attn_implementation = "eager"
+                    logger.warning(
+                        "flash_attn not available; using eager attention. "
+                        "Install flash-attn to enable FlashAttention2 acceleration."
+                    )
             elif torch.backends.mps.is_available():
                 dtype = torch.bfloat16
                 device_map = "mps"
