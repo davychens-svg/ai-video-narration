@@ -258,7 +258,74 @@ server {
 
 Replace `YOUR_SERVER_IP` with your actual server IP.
 
-### 7.3 Enable Site and Fix Permissions
+### 7.3 Set Up Password Authentication (Recommended for Production)
+
+Protect your application with nginx basic authentication:
+
+```bash
+# Install apache2-utils for htpasswd
+apt install apache2-utils -y
+
+# Create password file (replace 'admin' with your desired username)
+htpasswd -c /etc/nginx/.htpasswd admin
+
+# Enter password when prompted (you'll type it twice)
+# Example: Use a strong password like: MySecurePass123!
+```
+
+**Important**: Remember your username and password! You'll need them to access the application.
+
+### 7.4 Update Nginx Configuration with Authentication
+
+Edit `/etc/nginx/sites-available/vision-ai` to add authentication:
+
+```nginx
+server {
+    listen 80;
+    server_name YOUR_SERVER_IP;
+
+    # Password protection for entire site
+    auth_basic "Vision AI - Restricted Access";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    # Frontend
+    location / {
+        root /root/ai-video-narration/frontend/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Backend API
+    location /api/ {
+        proxy_pass http://localhost:8001/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # WebSocket
+    location /ws {
+        proxy_pass http://localhost:8001/ws;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
+    }
+
+    # Health endpoint (optional: allow without auth for monitoring)
+    location = /health {
+        auth_basic off;
+        proxy_pass http://localhost:8001/health;
+    }
+}
+```
+
+Replace `YOUR_SERVER_IP` with your actual server IP.
+
+**Note**: The configuration above protects the entire site. Users will see a login dialog when accessing `http://YOUR_SERVER_IP`.
+
+### 7.5 Enable Site and Fix Permissions
 
 ```bash
 # Enable site
@@ -429,6 +496,56 @@ cd ../frontend
 npm install
 npm run build
 systemctl restart nginx
+```
+
+## Password Management
+
+### Adding More Users
+
+To add additional users to access the application:
+
+```bash
+# Add another user (omit -c flag to append, not overwrite)
+htpasswd /etc/nginx/.htpasswd newusername
+
+# Enter password when prompted
+```
+
+### Changing Password
+
+To change a password for an existing user:
+
+```bash
+# Remove old entry and add new one
+htpasswd -D /etc/nginx/.htpasswd username  # Delete user
+htpasswd /etc/nginx/.htpasswd username      # Re-add with new password
+```
+
+### Removing a User
+
+```bash
+htpasswd -D /etc/nginx/.htpasswd username
+systemctl reload nginx
+```
+
+### Viewing All Users
+
+```bash
+cat /etc/nginx/.htpasswd
+# Shows usernames (passwords are encrypted)
+```
+
+### Disabling Authentication (Not Recommended)
+
+If you want to remove password protection:
+
+```bash
+# Edit nginx config and remove these lines:
+# auth_basic "Vision AI - Restricted Access";
+# auth_basic_user_file /etc/nginx/.htpasswd;
+
+nano /etc/nginx/sites-available/vision-ai
+systemctl reload nginx
 ```
 
 ## SSL/HTTPS Setup (Optional)

@@ -234,9 +234,32 @@ source ../venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Password Protection (Optional)
+
+For local development, password protection is typically not needed. However, if you want to add authentication:
+
+### Option 1: Using Local Nginx (Advanced)
+
+If you set up nginx locally (not covered in this guide), you can use the same nginx basic authentication as described in [DEPLOYMENT_LINUX.md](DEPLOYMENT_LINUX.md#password-management).
+
+### Option 2: SSH Tunnel for Remote Access
+
+If you need to access your Mac remotely:
+
+```bash
+# On remote machine, create SSH tunnel
+ssh -L 3000:localhost:3000 -L 8001:localhost:8001 user@your-mac-ip
+
+# Then access via localhost:3000 on remote machine
+```
+
+This is more secure than exposing ports directly.
+
 ## Notes
 
+- Mac deployment is designed for local development, not production
 - Keep llama-server running for optimal SmolVLM performance
 - If llama-server stops, the application automatically falls back to transformers
 - Moondream always uses transformers (no llama.cpp support)
 - The frontend automatically detects the available backend
+- For production deployment, use the [Linux GPU Server Guide](DEPLOYMENT_LINUX.md) with password protection
