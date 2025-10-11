@@ -518,7 +518,7 @@ class VLMProcessor:
     def preprocess_frame(
         self,
         frame: np.ndarray,
-        mode: Literal["caption", "query", "detect", "point"] = "caption"
+        mode: Literal["caption", "query", "detect", "point", "mask"] = "caption"
     ) -> Tuple[Image.Image, float, float]:
         """
         Preprocess video frame for VLM
@@ -531,7 +531,7 @@ class VLMProcessor:
         orig_height, orig_width = frame.shape[:2]
 
         if isinstance(self.model, Moondream):
-            max_side = 512 if mode in ("detection", "point") else 384
+            max_side = 512 if mode in ("detection", "point", "mask") else 384
             if max(orig_width, orig_height) > max_side:
                 scale = max_side / max(orig_width, orig_height)
                 new_width = max(1, int(round(orig_width * scale)))
@@ -556,7 +556,7 @@ class VLMProcessor:
     async def process_frame(
         self,
         frame: np.ndarray,
-        mode: Literal["caption", "query", "detect", "point"] = "caption",
+        mode: Literal["caption", "query", "detect", "point", "mask"] = "caption",
         user_input: Optional[str] = None,
         click_coords: Optional[Tuple[int, int]] = None,
         response_length: str = "medium"
@@ -565,8 +565,8 @@ class VLMProcessor:
         Process video frame and generate output
         Args:
             frame: numpy array (H, W, 3) in RGB
-            mode: processing mode (caption/query/detect/point)
-            user_input: User's question for query mode or object description for detect/point
+            mode: processing mode (caption/query/detect/point/mask)
+            user_input: User's question for query mode or object description for detect/point/mask
             click_coords: (x, y) coordinates for point mode with Moondream
         Returns:
             Dictionary with result and metadata
@@ -834,6 +834,72 @@ class VLMProcessor:
                 "mode": mode,
                 "model": self.current_model_name,
                 "fallback_used": fallback_used
+            }
+
+        elif mode == "mask":
+            # Mask mode: uses detection to find objects to mask
+            if not user_input:
+                return {
+                    "type": "caption",
+                    "caption": "Please specify objects to mask",
+                    "mode": mode,
+                    "model": self.current_model_name
+                }
+
+            raw_query = user_input
+            if isinstance(raw_query, str):
+                targets = [t.strip() for t in raw_query.split(',') if t.strip()]
+            else:
+                targets = []
+
+            if not targets:
+                targets = ["all objects"]
+
+            detections: List[Dict[str, Any]] = []
+
+            for target in targets:
+                raw_results = await asyncio.to_thread(
+                    self.model.detect,
+                    image,
+                    target
+                )
+
+                if not raw_results:
+                    continue
+
+                for det in raw_results:
+                    scaled_det: Dict[str, Any] = dict(det) if isinstance(det, dict) else {}
+                    bbox = scaled_det.get('bbox')
+                    scaled_bbox = self._scale_bbox(bbox, scale_x, scale_y)
+                    if not scaled_bbox:
+                        continue
+
+                    scaled_det['bbox'] = scaled_bbox
+                    scaled_det['confidence'] = None
+
+                    label = scaled_det.get('label')
+                    if not label or str(label).lower() == 'object':
+                        label = target
+                    scaled_det['label'] = str(label)
+
+                    detections.append(scaled_det)
+
+            # Format mask message for display
+            if detections:
+                labels = [f"\"{det.get('label', 'object')}\"" for det in detections]
+                count = len(detections)
+                object_word = "object" if count == 1 else "objects"
+                mask_text = f"Masking {count} {object_word}: " + ", ".join(labels)
+            else:
+                mask_text = "No objects to mask"
+
+            return {
+                "type": "caption",
+                "caption": mask_text,
+                "detections": detections,
+                "object": raw_query,
+                "mode": mode,
+                "model": self.current_model_name
             }
 
         else:

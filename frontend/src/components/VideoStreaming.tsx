@@ -26,7 +26,7 @@ interface VideoStreamingProps {
   serverUrl?: string;
   detections?: Detection[];
   points?: Point[];
-  overlayMode?: 'detection' | 'point' | 'none';
+  overlayMode?: 'detection' | 'point' | 'mask' | 'none';
   backend?: 'transformers' | 'llamacpp';
   prompt?: string;
   responseLength?: 'short' | 'medium' | 'long';

@@ -91,18 +91,24 @@ npm run dev
 # Start backend
 cd server
 source ../venv/bin/activate
+export ALLOWED_ORIGINS="https://your-domain.com"
 uvicorn main:app --host 0.0.0.0 --port 8001
 
 # Serve frontend build
 cd frontend
+npm run build
+cat <<'ENV' > .env.production
+VITE_SERVER_URL=https://api.your-domain.com
+VITE_WS_URL=wss://api.your-domain.com/ws
+ENV
 npx serve -s dist -p 5173
 ```
 
 ### 6. Access Application
 
 Open your browser and navigate to:
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8001
+- Frontend: `http://localhost:5173` (or `https://your-domain.com` in production)
+- Backend API: `http://localhost:8001` (or your public API endpoint)
 - API Docs: http://localhost:8001/docs
 
 ### Performance Expectations (Apple Silicon)
@@ -179,6 +185,17 @@ cd frontend
 npm install
 npm run build
 cd ..
+```
+
+Configure the runtime endpoints before launching:
+
+```bash
+export ALLOWED_ORIGINS="https://vision.example.com"
+
+cat <<'ENV' > frontend/.env.production
+VITE_SERVER_URL=https://api.example.com
+VITE_WS_URL=wss://api.example.com/ws
+ENV
 ```
 
 ### 4. Configure for NVIDIA GPU
@@ -366,40 +383,30 @@ sudo certbot --nginx -d your-domain.com
 
 ## Configuration
 
-### Environment Variables
+### Backend Environment
 
-Create `.env` file in the `server/` directory:
+Configure CORS and public origins before starting the FastAPI server:
+
+```bash
+export ALLOWED_ORIGINS="https://vision.example.com,https://app.example.com"
+python server/main.py
+```
+
+- Separate multiple origins with commas. Use `"*"` to allow any origin (credentials will be disabled automatically for security).
+- When running under a process manager (systemd, supervisor, etc.) add the variable to the unit file.
+
+### Frontend Environment
+
+Create an environment file inside `frontend/` (e.g. `.env.production` or `.env.local`) to point the UI at your backend:
 
 ```env
-# Server Configuration
-HOST=0.0.0.0
-PORT=8001
-
-# Model Configuration
-DEFAULT_MODEL=smolvlm
-MAX_TOKENS=150
-TEMPERATURE=0.0
-
-# Performance
-LLAMA_SERVER_URL=http://127.0.0.1:8080
-LLAMA_TIMEOUT=5.0
-
-# Security (for production)
-ALLOWED_ORIGINS=https://your-domain.com,http://localhost:5173
+VITE_SERVER_URL=https://api.example.com
+VITE_WS_URL=wss://api.example.com/ws
 ```
 
-### Frontend Configuration
-
-Edit `frontend/src/App.tsx` to set default server URL:
-
-```typescript
-const [settings, setSettings] = useState({
-  serverUrl: import.meta.env.PROD
-    ? 'https://your-domain.com'
-    : 'http://localhost:8001',
-  // ... other settings
-});
-```
+- `VITE_SERVER_URL` is used for REST endpoints (health checks, frame uploads).
+- `VITE_WS_URL` is the realtime websocket endpoint. Always use `wss://` when your site is served over HTTPS.
+- The in-app **Settings** dialog can override these values at runtime if you need to test multiple environments.
 
 ---
 

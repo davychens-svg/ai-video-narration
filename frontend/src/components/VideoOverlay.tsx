@@ -16,7 +16,7 @@ interface VideoOverlayProps {
   videoRef: RefObject<HTMLVideoElement>;
   detections?: Detection[];
   points?: Point[];
-  mode?: 'detection' | 'point' | 'none';
+  mode?: 'detection' | 'point' | 'mask' | 'none';
 }
 
 export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'none' }: VideoOverlayProps) {
@@ -114,6 +114,43 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
       });
     }
 
+    if (mode === 'mask' && detections.length > 0) {
+      // Apply privacy masks using blur effect
+      detections.forEach((detection) => {
+        if (!detection?.bbox || detection.bbox.length < 4) {
+          return;
+        }
+
+        const [rawX1, rawY1, rawX2, rawY2] = detection.bbox;
+        const x1 = Number(rawX1) || 0;
+        const y1 = Number(rawY1) || 0;
+        const x2 = Number(rawX2) || 0;
+        const y2 = Number(rawY2) || 0;
+
+        const width = x2 - x1;
+        const height = y2 - y1;
+
+        // Apply blur effect by drawing semi-transparent rectangles
+        // Create pixelated/censored effect
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // Dark mask
+        ctx.fillRect(x1, y1, width, height);
+
+        // Add "MASKED" label
+        ctx.strokeStyle = '#FF0000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x1, y1, width, height);
+
+        ctx.fillStyle = '#FF0000';
+        const labelText = 'MASKED';
+        const textMetrics = ctx.measureText(labelText);
+        ctx.fillRect(x1, y1 - 20, textMetrics.width + 10, 20);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px Inter, sans-serif';
+        ctx.fillText(labelText, x1 + 5, y1 - 5);
+      });
+    }
+
     // Re-draw on video updates
     const interval = setInterval(() => {
       if (mode !== 'none' && (detections.length > 0 || points.length > 0)) {
@@ -182,6 +219,38 @@ export function VideoOverlay({ videoRef, detections = [], points = [], mode = 'n
               ctx.font = 'bold 12px Inter, sans-serif';
               ctx.fillText(point.label, x + 17, y + 4);
             }
+          });
+        }
+
+        if (mode === 'mask' && detections.length > 0) {
+          detections.forEach((detection) => {
+            if (!detection?.bbox || detection.bbox.length < 4) {
+              return;
+            }
+
+            const [rawX1, rawY1, rawX2, rawY2] = detection.bbox;
+            const x1 = Number(rawX1) || 0;
+            const y1 = Number(rawY1) || 0;
+            const x2 = Number(rawX2) || 0;
+            const y2 = Number(rawY2) || 0;
+            const width = x2 - x1;
+            const height = y2 - y1;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(x1, y1, width, height);
+
+            ctx.strokeStyle = '#FF0000';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x1, y1, width, height);
+
+            ctx.fillStyle = '#FF0000';
+            const labelText = 'MASKED';
+            const textMetrics = ctx.measureText(labelText);
+            ctx.fillRect(x1, y1 - 20, textMetrics.width + 10, 20);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 12px Inter, sans-serif';
+            ctx.fillText(labelText, x1 + 5, y1 - 5);
           });
         }
       }

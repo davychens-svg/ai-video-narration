@@ -48,10 +48,27 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Vision AI Demo")
 
 # Add CORS middleware
+allowed_origins_env = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
+)
+allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+
+if not allowed_origins:
+    allowed_origins = ["*"]
+
+allow_credentials = True
+if "*" in allowed_origins:
+    allowed_origins = ["*"]
+    # Browsers block credentials with wildcard origins, so disable them when '*' is set
+    allow_credentials = False
+
+logger.info(f"CORS allowed origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -377,7 +394,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         current_mode = feature
                         logger.info(f"Mode updated: {feature}")
 
-                    if feature in {"detection", "point"}:
+                    if feature in {"detection", "point", "mask"}:
                         detect_object_input = trimmed_query
                         user_query_input = None
                         log_msg = trimmed_query or "all objects"

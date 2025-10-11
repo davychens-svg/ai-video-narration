@@ -6,7 +6,7 @@ import { Badge } from './ui/badge';
 import { Brain, Eye, Search, Target, Send, Check } from 'lucide-react';
 
 export type ModelType = 'smolvlm' | 'moondream';
-export type MoondreamFeature = 'query' | 'caption' | 'detection' | 'point';
+export type MoondreamFeature = 'query' | 'caption' | 'detection' | 'point' | 'mask';
 
 interface ModelSelectorProps {
   selectedModel: ModelType;
@@ -68,6 +68,11 @@ export function ModelSelector({
       name: 'Point Detection',
       description: 'Detect specific points and coordinates',
       icon: <Target className="w-4 h-4" />
+    },
+    mask: {
+      name: 'Privacy Mask',
+      description: 'Hide/blur detected objects for privacy',
+      icon: <Eye className="w-4 h-4" />
     }
   };
 
@@ -304,7 +309,7 @@ export function ModelSelector({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
                     <Check className="w-3 h-3" />
-                    Leave blank to detect everything or specify a target and press update
+                    Enter one or more comma-separated objects (e.g. "person, car") to highlight them in blue boxes
                   </p>
                   <Button
                     size="sm"
@@ -341,7 +346,44 @@ export function ModelSelector({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
                     <Check className="w-3 h-3" />
-                    Enter the object to locate, then press update
+                    Use a precise label (e.g. "person") to drop a pointer directly on the video stream
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={onMoondreamSubmit}
+                    disabled={!customQuery.trim() || isProcessing}
+                    className="flex items-center gap-2 shrink-0"
+                  >
+                    <Send className="w-3 h-3" />
+                    Update
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Privacy Mask Input */}
+            {moondreamFeature === 'mask' && (
+              <div className="space-y-2">
+                <Label htmlFor="mask-object">Object to Mask</Label>
+                <Input
+                  id="mask-object"
+                  placeholder="e.g., 'face', 'person', 'license plate', 'screen'"
+                  value={customQuery}
+                  onChange={(e) => onCustomQueryChange(e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  disabled={isProcessing}
+                  className="bg-background/50 border-input text-foreground placeholder:text-muted-foreground"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && customQuery.trim() && onMoondreamSubmit) {
+                      e.preventDefault();
+                      onMoondreamSubmit();
+                    }
+                  }}
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-green-400 flex items-center gap-1 flex-1">
+                    <Check className="w-3 h-3" />
+                    Detected objects will be hidden/blurred for privacy
                   </p>
                   <Button
                     size="sm"

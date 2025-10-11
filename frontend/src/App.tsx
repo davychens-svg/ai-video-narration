@@ -21,6 +21,41 @@ interface Point {
 }
 
 export default function App() {
+  const resolveDefaultConnections = () => {
+    const envServerUrl = import.meta.env.VITE_SERVER_URL as string | undefined;
+    const envWebsocketUrl = import.meta.env.VITE_WS_URL as string | undefined;
+
+    if (envServerUrl && envWebsocketUrl) {
+      return {
+        serverUrl: envServerUrl,
+        websocketUrl: envWebsocketUrl
+      };
+    }
+
+    if (typeof window !== 'undefined') {
+      const { protocol, hostname, port } = window.location;
+      const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+      let backendPort: string | null = null;
+      if (isLocalHost) {
+        backendPort = '8001';
+      } else if (protocol === 'http:' && port && port !== '' && !['80', '443'].includes(port)) {
+        backendPort = port;
+      }
+
+      const serverUrl = `${protocol}//${hostname}${backendPort ? `:${backendPort}` : ''}`;
+      const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+      const websocketUrl = `${wsProtocol}//${hostname}${backendPort ? `:${backendPort}` : ''}/ws`;
+
+      return { serverUrl, websocketUrl };
+    }
+
+    return {
+      serverUrl: 'http://localhost:8001',
+      websocketUrl: 'ws://localhost:8001/ws'
+    };
+  };
+
   // Application state
   const [selectedModel, setSelectedModel] = useState<ModelType>('smolvlm');
   const [moondreamFeature, setMoondreamFeature] = useState<MoondreamFeature>('caption');
@@ -32,16 +67,20 @@ export default function App() {
   const [points, setPoints] = useState<Point[]>([]);
 
   // Settings state
-  const [settings, setSettings] = useState({
-    serverUrl: 'http://localhost:8001',
-    websocketUrl: 'ws://localhost:8001/ws',
-    videoQuality: 'medium' as 'low' | 'medium' | 'high',
-    framerate: 15,
-    captureInterval: 500, // milliseconds between frame captures
-    autoReconnect: true,
-    maxRetries: 5,
-    debugMode: false,
-    responseLength: 'medium' as 'short' | 'medium' | 'long'
+  const [settings, setSettings] = useState(() => {
+    const defaults = resolveDefaultConnections();
+
+    return {
+      serverUrl: defaults.serverUrl,
+      websocketUrl: defaults.websocketUrl,
+      videoQuality: 'medium' as 'low' | 'medium' | 'high',
+      framerate: 15,
+      captureInterval: 500, // milliseconds between frame captures
+      autoReconnect: true,
+      maxRetries: 5,
+      debugMode: false,
+      responseLength: 'medium' as 'short' | 'medium' | 'long'
+    };
   });
 
   // WebSocket connection
@@ -336,6 +375,8 @@ export default function App() {
                       ? 'detection'
                       : selectedModel === 'moondream' && moondreamFeature === 'point'
                       ? 'point'
+                      : selectedModel === 'moondream' && moondreamFeature === 'mask'
+                      ? 'mask'
                       : 'none'
                   }
                   backend={selectedModel === 'moondream' ? 'transformers' : 'llamacpp'}

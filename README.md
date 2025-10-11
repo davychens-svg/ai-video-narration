@@ -154,13 +154,40 @@ npm install  # first time only
 npm run dev
 ```
 
+### Configuration (Local & Cloud)
+
+| Variable | Scope | Default | Description |
+|----------|-------|---------|-------------|
+| `ALLOWED_ORIGINS` | Backend (`server/main.py`) | `http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001` | Comma-separated list of origins allowed by CORS. Use `"*"` to allow all origins (credentials are disabled automatically). |
+| `VITE_SERVER_URL` | Frontend (`frontend`) | Auto-resolves to local backend (`http://localhost:8001`) | REST base URL for API calls. Set to your public backend endpoint, e.g. `https://api.example.com`. |
+| `VITE_WS_URL` | Frontend (`frontend`) | Auto-resolves to local websocket (`ws://localhost:8001/ws`) | WebSocket endpoint for captions/detections. Use `wss://` when hosting over HTTPS. |
+
+**Example (cloud deployment):**
+
+```bash
+# Backend – allow requests from your public domain/IP
+export ALLOWED_ORIGINS="https://vision.example.com"
+python server/main.py
+
+# Frontend – configure endpoints before building
+cat <<'ENV' > frontend/.env.production
+VITE_SERVER_URL=https://api.example.com
+VITE_WS_URL=wss://api.example.com/ws
+ENV
+
+cd frontend
+npm run build
+```
+
+You can also override URLs on the fly from the **Settings** dialog in the UI—handy for QA against multiple environments.
+
 ### Using the App
 
-1. Open browser to `http://localhost:3001`
-2. Click "Start" to begin camera streaming
-3. Select model: SmolVLM (fast) or Moondream 3.0 (advanced features)
-4. Watch real-time AI narration appear!
-5. For Moondream: switch between Caption, Query, Detect, and Point modes
+1. Open the frontend in your browser (`http://localhost:3000` for Vite dev server or your deployed domain)
+2. Click **Start Camera** or load a video to begin streaming
+3. Pick a model: **SmolVLM** for ultra-fast captions or **Moondream** for advanced features
+4. Watch realtime narration, detections, and points overlay the video feed
+5. Adjust connection details, response length, or detection prompts via **Settings** at any time
 
 ## Architecture
 
@@ -245,8 +272,15 @@ See [CONTEXT_ENGINEERING.md](CONTEXT_ENGINEERING.md) for detailed prompt enginee
 ### Moondream 3.0 Preview - Feature-Rich
 - **Size**: 0.5B parameters (int8 quantized)
 - **Speed**: Variable based on feature
-- **Quality**: Multiple modes (caption, query, detect, point)
+- **Quality**: Multiple modes (caption, query, detect, point, mask)
 - **Model**: `vikhyatk/moondream-0_5b-int8`
+
+**Moondream Features**:
+- **Caption**: Automatic image description (short/medium/long)
+- **Query**: Answer custom questions about the video
+- **Detection**: Object detection with blue bounding boxes
+- **Point**: Locate specific objects with center points
+- **Mask**: Privacy masking for detected objects (NEW)
 
 ## API Endpoints
 
