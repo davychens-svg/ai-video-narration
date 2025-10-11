@@ -347,8 +347,17 @@ async def websocket_endpoint(websocket: WebSocket):
                 msg = json.loads(data)
 
                 if msg.get("type") == "switch_model":
-                    model_name = msg.get("model", "smolvlm")
-                    await vlm_processor.switch_model(model_name)
+                    model_name = msg.get("model", "qwen2vl")
+                    try:
+                        await vlm_processor.switch_model(model_name)
+                    except Exception as e:
+                        logger.error(f"Failed to switch model to {model_name}: {e}", exc_info=True)
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": f"Unable to load model '{model_name}'. Please check server logs.",
+                            "model": model_name
+                        })
+                        continue
 
                     # Get supported modes for new model
                     supported_modes = vlm_processor.get_supported_modes()

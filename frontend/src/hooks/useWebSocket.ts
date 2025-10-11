@@ -106,8 +106,13 @@ export function useWebSocket({
               break;
             
             case 'error':
-              log(`Server error: ${message.data.message}`);
-              setLastError(message.data.message);
+              // Payload may be {data: {message}} or {message: "..."}
+              const errorMessage =
+                (message.data && (message.data.message || message.data.error)) ||
+                message.message ||
+                'Server reported an unknown error.';
+              log(`Server error: ${errorMessage}`);
+              setLastError(errorMessage);
               break;
             
             default:

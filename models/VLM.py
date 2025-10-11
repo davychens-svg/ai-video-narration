@@ -6,6 +6,8 @@ Plus Moondream 3.0 with full feature set (caption, query, detect, point)
 
 import asyncio
 import logging
+import re
+import string
 import time
 from typing import Optional, Literal, List, Dict, Tuple, Any
 import torch
@@ -589,9 +591,12 @@ class Qwen2VL(VLMModel):
             output_ids = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
+                min_new_tokens=16,
                 do_sample=False,
                 num_beams=1,
                 use_cache=True,
+                repetition_penalty=1.05,
+                no_repeat_ngram_size=4,
                 pad_token_id=self.processor.tokenizer.pad_token_id,
                 eos_token_id=self.processor.tokenizer.eos_token_id,
             )
@@ -604,13 +609,44 @@ class Qwen2VL(VLMModel):
                 clean_up_tokenization_spaces=False
             )[0]
 
-            return response.strip() or "Processing..."
+            cleaned = self._clean_caption(response)
+            return cleaned or "Unable to describe the image."
 
         except Exception as e:
             logger.error(f"Error generating response with Qwen2-VL: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return "Error processing frame"
+
+    @staticmethod
+    def _clean_caption(text: str) -> str:
+        """Normalize model output and remove meaningless punctuation-heavy strings."""
+        if not isinstance(text, str):
+            return ""
+
+        cleaned = text.strip()
+        if not cleaned:
+            return ""
+
+        # Collapse whitespace
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        # Reduce excessive punctuation runs
+        cleaned = re.sub(r'([!?。！？])\1{2,}', r'\1\1', cleaned)
+        cleaned = re.sub(r'([,.，。])\1{1,}', r'\1', cleaned)
+        cleaned = cleaned.strip()
+
+        # Discard strings that are mostly punctuation
+        if cleaned and Qwen2VL._is_mostly_punctuation(cleaned):
+            return ""
+
+        return cleaned
+
+    @staticmethod
+    def _is_mostly_punctuation(text: str, threshold: float = 0.6) -> bool:
+        if not text:
+            return True
+        punct_count = sum(1 for ch in text if ch in string.punctuation or ch in "？！。；，、")
+        return (punct_count / len(text)) >= threshold
 
     @torch.inference_mode()
     def caption(
