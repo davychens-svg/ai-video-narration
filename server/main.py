@@ -38,7 +38,7 @@ qwen_capture_dir = log_dir / "qwen_captures"
 qwen_capture_dir.mkdir(exist_ok=True)
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(log_dir / 'server.log'),
