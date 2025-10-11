@@ -68,11 +68,22 @@ class VLMModel:
 
     def unload(self):
         """Free memory"""
-        if self.model is not None:
-            del self.model
+        model_obj = getattr(self, "model", None)
+        processor_obj = getattr(self, "processor", None)
+
+        if model_obj is not None:
+            del self.model  # release reference for GC
+        if processor_obj is not None and hasattr(self, "processor"):
             del self.processor
-            torch.cuda.empty_cache() if torch.cuda.is_available() else None
-            self.is_ready = False
+
+        # Recreate attributes so downstream code can still reference them safely
+        self.model = None
+        self.processor = None
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self.is_ready = False
 
 
 class SmolVLM(VLMModel):
@@ -572,7 +583,7 @@ class Qwen2VL(VLMModel):
         self,
         image: Image.Image,
         prompt: str,
-        response_language: str = "ja",
+        response_language: str = "en",
         max_new_tokens: int = 128,
         min_new_tokens: int = 16,
         use_sampling: bool = False
@@ -647,14 +658,33 @@ class Qwen2VL(VLMModel):
 
             generated = output_ids[:, inputs.input_ids.shape[-1]:]
 
-            response = self.processor.batch_decode(
-                generated,
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False
-            )[0]
+            decoded_candidates: List[str] = []
 
-            cleaned = self._clean_caption(response)
-            return cleaned or "Unable to describe the image."
+            if generated.size(-1) > 0:
+                decoded_candidates.append(
+                    self.processor.batch_decode(
+                        generated,
+                        skip_special_tokens=True,
+                        clean_up_tokenization_spaces=False
+                    )[0]
+                )
+
+            # Always fall back to decoding the full sequence in case slicing removed everything
+            decoded_candidates.append(
+                self.processor.batch_decode(
+                    output_ids,
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=False
+                )[0]
+            )
+
+            for raw_response in decoded_candidates:
+                cleaned = self._clean_caption(raw_response)
+                if cleaned:
+                    return cleaned
+
+            logger.warning("Qwen2-VL returned empty caption after decoding attempts.")
+            return "Unable to describe the image."
 
         except Exception as e:
             logger.error(f"Error generating response with Qwen2-VL: {e}")
@@ -712,7 +742,7 @@ class Qwen2VL(VLMModel):
         cfg = length_map.get(response_length, length_map["medium"])
 
         detected_language = self._detect_language(prompt)
-        target_language = detected_language or "ja"
+        target_language = detected_language or language or "en"
 
         result = self._generate_chat_response(
             image,
@@ -758,7 +788,7 @@ class Qwen2VL(VLMModel):
         cfg = length_map.get(response_length, length_map["medium"])
 
         detected_language = self._detect_language(question_text)
-        target_language = detected_language or language or "ja"
+        target_language = detected_language or language or "en"
 
         answer = self._generate_chat_response(
             image,
@@ -928,7 +958,11 @@ class VLMProcessor:
         # Qwen2VL supports caption + query modes with multilingual capability
         if isinstance(self.model, Qwen2VL):
             prompt = user_input if isinstance(user_input, str) and user_input.strip() else None
-            target_language = self.model._detect_language(prompt) or "ja"
+            target_language = (
+                self.model._detect_language(prompt)
+                or (self.language if isinstance(self.language, str) and self.language else None)
+                or "en"
+            )
 
             if mode == "query":
                 if not prompt:
