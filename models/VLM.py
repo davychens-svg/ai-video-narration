@@ -713,6 +713,10 @@ class Qwen2VL(VLMModel):
         if cleaned and Qwen2VL._is_mostly_punctuation(cleaned):
             return ""
 
+        # Require at least one alphabetic character (covers Latin, CJK, etc.) to avoid pure symbol/number outputs
+        if cleaned and not any(ch.isalpha() for ch in cleaned):
+            return ""
+
         return cleaned
 
     @staticmethod
@@ -744,25 +748,46 @@ class Qwen2VL(VLMModel):
         detected_language = self._detect_language(prompt)
         target_language = detected_language or language or "en"
 
-        result = self._generate_chat_response(
-            image,
-            prompt,
-            response_language=target_language,
-            max_new_tokens=cfg["max"],
-            min_new_tokens=cfg["min"],
-            use_sampling=cfg["sampling"]
-        )
-        if not result or not result.strip():
+        attempts = [
+            {
+                "prompt": prompt,
+                "response_language": target_language,
+                "max_new_tokens": cfg["max"],
+                "min_new_tokens": cfg["min"],
+                "use_sampling": cfg["sampling"],
+            },
+            {
+                "prompt": None,
+                "response_language": target_language,
+                "max_new_tokens": length_map["medium"]["max"],
+                "min_new_tokens": length_map["medium"]["min"],
+                "use_sampling": True,
+            },
+            {
+                "prompt": prompt or self._default_prompt("en"),
+                "response_language": "en",
+                "max_new_tokens": length_map["medium"]["max"],
+                "min_new_tokens": length_map["medium"]["min"],
+                "use_sampling": True,
+            },
+        ]
+
+        for attempt_idx, attempt in enumerate(attempts, start=1):
             result = self._generate_chat_response(
                 image,
-                None,
-                response_language=target_language,
-                max_new_tokens=length_map["medium"]["max"],
-                min_new_tokens=length_map["medium"]["min"],
-                use_sampling=True
+                attempt["prompt"],
+                response_language=attempt["response_language"],
+                max_new_tokens=attempt["max_new_tokens"],
+                min_new_tokens=attempt["min_new_tokens"],
+                use_sampling=attempt["use_sampling"]
             )
+            if result and result.strip():
+                if attempt_idx > 1:
+                    logger.debug(f"Qwen2-VL caption succeeded on retry attempt {attempt_idx}.")
+                return result
 
-        return result or "Unable to describe the image."
+        logger.warning("Qwen2-VL caption failed to produce meaningful text after retries.")
+        return "Unable to describe the image."
 
     @torch.inference_mode()
     def query(
@@ -790,25 +815,50 @@ class Qwen2VL(VLMModel):
         detected_language = self._detect_language(question_text)
         target_language = detected_language or language or "en"
 
-        answer = self._generate_chat_response(
-            image,
-            question_text,
-            response_language=target_language,
-            max_new_tokens=cfg["max"],
-            min_new_tokens=cfg["min"],
-            use_sampling=cfg["sampling"]
-        )
-        if not answer or not answer.strip():
-            answer = self._generate_chat_response(
-                image,
-                question_text,
-                response_language=target_language,
-                max_new_tokens=length_map["medium"]["max"],
-                min_new_tokens=length_map["medium"]["min"],
-                use_sampling=True
+        attempts = [
+            {
+                "prompt": question_text,
+                "response_language": target_language,
+                "max_new_tokens": cfg["max"],
+                "min_new_tokens": cfg["min"],
+                "use_sampling": cfg["sampling"],
+            },
+            {
+                "prompt": question_text,
+                "response_language": target_language,
+                "max_new_tokens": length_map["medium"]["max"],
+                "min_new_tokens": length_map["medium"]["min"],
+                "use_sampling": True,
+            },
+        ]
+
+        if target_language != "en":
+            attempts.append(
+                {
+                    "prompt": question_text,
+                    "response_language": "en",
+                    "max_new_tokens": length_map["medium"]["max"],
+                    "min_new_tokens": length_map["medium"]["min"],
+                    "use_sampling": True,
+                }
             )
 
-        return answer or "Unable to answer right now."
+        for attempt_idx, attempt in enumerate(attempts, start=1):
+            answer = self._generate_chat_response(
+                image,
+                attempt["prompt"],
+                response_language=attempt["response_language"],
+                max_new_tokens=attempt["max_new_tokens"],
+                min_new_tokens=attempt["min_new_tokens"],
+                use_sampling=attempt["use_sampling"]
+            )
+            if answer and answer.strip():
+                if attempt_idx > 1:
+                    logger.debug(f"Qwen2-VL query succeeded on retry attempt {attempt_idx}.")
+                return answer
+
+        logger.warning("Qwen2-VL query failed to produce meaningful text after retries.")
+        return "Unable to answer right now."
 
 
 class VLMProcessor:
