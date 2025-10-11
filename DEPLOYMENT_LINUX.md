@@ -241,9 +241,10 @@ apt install nginx -y
 
 ### 7.2 Configure Nginx Site
 
-Create `/etc/nginx/sites-available/vision-ai`:
+Create `/etc/nginx/sites-available/vision-ai` (replace `YOUR_SERVER_IP` with your server’s public IP or domain):
 
-```nginx
+```bash
+sudo tee /etc/nginx/sites-available/vision-ai >/dev/null <<'NGINX'
 server {
     listen 80;
     server_name YOUR_SERVER_IP;
@@ -273,9 +274,10 @@ server {
         proxy_set_header Host $host;
     }
 }
+NGINX
 ```
 
-Replace `YOUR_SERVER_IP` with your actual server IP.
+Run the command first, then edit the placeholder if needed with `sudo nano /etc/nginx/sites-available/vision-ai`.
 
 ### 7.3 Set Up Password Authentication (Recommended for Production)
 
