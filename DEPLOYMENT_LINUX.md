@@ -162,11 +162,15 @@ GPU: NVIDIA RTX 4000 Ada Generation
 
 ### 5.3 Configure Backend Environment
 
-Create `server/.env` (replace `your.public.ip.or.domain` with your host’s IP or domain):
+Create `.env` file from the template (replace `your.public.ip.or.domain` with your server's IP or domain):
 
 ```bash
+# Copy example file
+cp .env.example .env
+
+# Quick setup for production server
 SERVER_IP=your.public.ip.or.domain
-cat <<ENV > server/.env
+cat <<ENV > .env
 HOST=0.0.0.0
 PORT=8001
 DEFAULT_MODEL=smolvlm
@@ -174,10 +178,19 @@ MODEL_DEVICE=cuda
 MODEL_DTYPE=float16
 ALLOWED_ORIGINS=http://$SERVER_IP,https://$SERVER_IP
 MAX_WORKERS=4
+LOG_LEVEL=INFO
 ENV
 ```
 
-Edit later with `nano server/.env` if you need to tweak origins or ports.
+**Or manually edit:** `nano .env`
+
+**Important Configuration Options:**
+- `ALLOWED_ORIGINS`: Must include your server's IP/domain (comma-separated, no spaces)
+- `DEFAULT_MODEL`: Choose `smolvlm` (fast), `qwen2vl` (multilingual), or `moondream` (feature-rich)
+- `MODEL_DEVICE`: Use `cuda` for GPU, `cpu` for CPU-only
+- `MODEL_DTYPE`: Use `float16` to save memory (requires GPU)
+
+See `.env.example` for all available options and detailed comments.
 
 ### 5.4 Test Backend Manually
 
@@ -381,15 +394,18 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/ai-video-narration/server
+WorkingDirectory=/root/ai-video-narration
 Environment="PATH=/root/ai-video-narration/venv/bin"
-ExecStart=/root/ai-video-narration/venv/bin/python main.py
+EnvironmentFile=/root/ai-video-narration/.env
+ExecStart=/root/ai-video-narration/venv/bin/python3 server/main.py
 Restart=always
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Note:** The `EnvironmentFile` directive loads all variables from `.env` automatically.
 
 ### 8.2 Enable and Start Service
 
