@@ -115,6 +115,7 @@ class SmolVLM(VLMModel):
 
     def __init__(self, device: str = "auto"):
         super().__init__("smolvlm", device)
+        self.supported_modes = {"caption", "query"}
 
     def load(self):
         """Load SmolVLM-500M model for fast inference on Mac"""
@@ -345,6 +346,7 @@ class MobileVLM(VLMModel):
 
     def __init__(self, device: str = "auto"):
         super().__init__("mobilevlm", device)
+        self.supported_modes = {"caption", "query"}
 
     def load(self):
         """Load MobileVLM model"""
@@ -413,6 +415,7 @@ class Moondream(VLMModel):
     def __init__(self, device: str = "auto"):
         super().__init__("moondream", device)
         self.supports_multimodal = True
+        self.supported_modes = {"caption", "query", "detection", "point", "mask"}
 
     def load(self):
         """Load Moondream 2 model"""
@@ -759,6 +762,7 @@ class Qwen2VL(VLMModel):
 
     def __init__(self, device: str = "auto"):
         super().__init__("qwen2vl", device)
+        self.supported_modes = {"caption", "query"}
         self.tokenizer = None
         self._processor_name = "Qwen/Qwen2-VL-2B-Instruct"
         self._processor_kwargs = {
@@ -1566,12 +1570,17 @@ class VLMProcessor:
         # Preprocess frame
         image, scale_x, scale_y = self.preprocess_frame(frame, mode)
 
+        current_mode = mode
+        if self.model and hasattr(self.model, 'supported_modes') and mode not in self.model.supported_modes:
+            logger.warning(f"Mode '{mode}' not supported by {self.current_model_name}, falling back to 'caption'.")
+            current_mode = "caption"
+
         # Handle different models and modes
         if isinstance(self.model, Moondream):
             # Moondream supports all modes
             result = await self._process_moondream(
                 image,
-                mode,
+                current_mode,
                 user_input,
                 click_coords,
                 response_length,
@@ -1579,8 +1588,8 @@ class VLMProcessor:
                 scale_y
             )
         else:
-            # SmolVLM/MobileVLM support caption and custom queries
-            result = await self._process_simple_vlm(image, mode, user_input, response_length)
+            # SmolVLM/MobileVLM/Qwen2VL support caption and custom queries
+            result = await self._process_simple_vlm(image, current_mode, user_input, response_length)
 
         return result
 
