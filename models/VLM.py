@@ -778,7 +778,7 @@ class Qwen2VL(VLMModel):
         try:
             # Determine device and dtype
             if torch.cuda.is_available():
-                dtype = torch.float32
+                dtype = torch.bfloat16
                 device_map = "auto"
                 # Use flash_attention_2 for speed on Ampere+ GPUs
                 try:
@@ -1616,11 +1616,7 @@ class VLMProcessor:
         # Qwen2VL supports caption + query modes with multilingual capability
         if isinstance(self.model, Qwen2VL):
             prompt = user_input if isinstance(user_input, str) and user_input.strip() else None
-            target_language = (
-                self.model._detect_language(prompt)
-                or (self.language if isinstance(self.language, str) and self.language else None)
-                or "en"
-            )
+            target_language = self.language or "ja"
 
             if mode == "query":
                 if not prompt:
