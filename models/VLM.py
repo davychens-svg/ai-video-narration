@@ -922,7 +922,18 @@ class Qwen2VL(VLMModel):
                 videos=video_inputs,
                 padding=True,
                 return_tensors="pt"
-            ).to(self.model.device)
+            )
+
+            # Move inputs to device with CUDA error handling
+            try:
+                inputs = inputs.to(self.model.device)
+            except (torch.AcceleratorError, RuntimeError) as e:
+                if "CUDA" in str(e) or "device-side assert" in str(e):
+                    logger.error(f"CUDA error when moving inputs to GPU: {e}")
+                    logger.error("GPU may be in corrupted state. Please restart the service with: systemctl restart vision-ai-backend")
+                    yield "GPU error - please restart service"
+                    return
+                raise
 
             generate_kwargs = {
                 "max_new_tokens": max_new_tokens,
@@ -982,6 +993,16 @@ class Qwen2VL(VLMModel):
                     # If final cleanup produces something different, yield a final marker
                     yield "\n[FINAL]" + final_cleaned
 
+        except (torch.AcceleratorError, RuntimeError) as e:
+            if "CUDA" in str(e) or "device-side assert" in str(e):
+                logger.error(f"CUDA error in Qwen2-VL generation: {e}")
+                logger.error("GPU corrupted. Restart service: systemctl restart vision-ai-backend")
+                yield "GPU error - please restart service"
+            else:
+                logger.error(f"Error generating response with Qwen2-VL: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                yield "Error processing frame"
         except Exception as e:
             logger.error(f"Error generating response with Qwen2-VL: {e}")
             import traceback
@@ -1037,7 +1058,17 @@ class Qwen2VL(VLMModel):
                 videos=video_inputs,
                 padding=True,
                 return_tensors="pt"
-            ).to(self.model.device)
+            )
+
+            # Move inputs to device with CUDA error handling
+            try:
+                inputs = inputs.to(self.model.device)
+            except (torch.AcceleratorError, RuntimeError) as e:
+                if "CUDA" in str(e) or "device-side assert" in str(e):
+                    logger.error(f"CUDA error when moving inputs to GPU: {e}")
+                    logger.error("GPU may be in corrupted state. Please restart the service with: systemctl restart vision-ai-backend")
+                    return "GPU error - please restart service"
+                raise
 
             generate_kwargs = {
                 "max_new_tokens": max_new_tokens,
@@ -1099,6 +1130,16 @@ class Qwen2VL(VLMModel):
             logger.warning("Qwen2-VL returned empty caption after decoding attempts.")
             return "Unable to describe the image."
 
+        except (torch.AcceleratorError, RuntimeError) as e:
+            if "CUDA" in str(e) or "device-side assert" in str(e):
+                logger.error(f"CUDA error in Qwen2-VL generation: {e}")
+                logger.error("GPU corrupted. Restart service: systemctl restart vision-ai-backend")
+                return "GPU error - please restart service"
+            else:
+                logger.error(f"Error generating response with Qwen2-VL: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                return "Error processing frame"
         except Exception as e:
             logger.error(f"Error generating response with Qwen2-VL: {e}")
             import traceback
