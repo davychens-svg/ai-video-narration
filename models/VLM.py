@@ -67,34 +67,47 @@ class VLMModel:
         raise NotImplementedError
 
     def unload(self):
-        """Free memory"""
-        model_obj = getattr(self, "model", None)
-        processor_obj = getattr(self, "processor", None)
+        """Free memory - completely safe, never crashes"""
+        try:
+            model_obj = getattr(self, "model", None)
+            processor_obj = getattr(self, "processor", None)
 
-        if model_obj is not None:
-            del self.model  # release reference for GC
-        if processor_obj is not None and hasattr(self, "processor"):
-            del self.processor
-
-        # Recreate attributes so downstream code can still reference them safely
-        self.model = None
-        self.processor = None
-
-        # Safe CUDA cache clearing - catch errors from corrupted GPU state
-        if torch.cuda.is_available():
-            try:
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
-            except Exception as e:
-                logger.warning(f"CUDA cleanup failed (GPU may be in bad state): {e}")
-                # Try to reset CUDA context if possible
+            if model_obj is not None:
                 try:
-                    import subprocess
-                    subprocess.run(['nvidia-smi', '--gpu-reset'], capture_output=True, timeout=5)
+                    del self.model
                 except:
                     pass
 
-        self.is_ready = False
+            if processor_obj is not None and hasattr(self, "processor"):
+                try:
+                    del self.processor
+                except:
+                    pass
+
+            # Recreate attributes so downstream code can still reference them safely
+            self.model = None
+            self.processor = None
+
+            # Safe CUDA cache clearing - swallow ALL errors silently
+            if torch.cuda.is_available():
+                try:
+                    torch.cuda.empty_cache()
+                except:
+                    pass  # Silently ignore - GPU may be corrupted
+
+                try:
+                    torch.cuda.synchronize()
+                except:
+                    pass  # Silently ignore - GPU may be corrupted
+
+            self.is_ready = False
+
+        except Exception as e:
+            # Ultimate safety net - never let unload() crash
+            logger.warning(f"Error during model unload (continuing anyway): {e}")
+            self.model = None
+            self.processor = None
+            self.is_ready = False
 
 
 class SmolVLM(VLMModel):
