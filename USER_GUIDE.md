@@ -352,27 +352,34 @@ Displays 3 status indicators:
 
 ## 📈 System Architecture
 
-```
-┌─────────────┐
-│   Browser   │
-│  (Frontend) │
-└──────┬──────┘
-       │ HTTP POST (frames)
-       │ WebSocket (config)
-       ↓
-┌─────────────┐
-│   FastAPI   │
-│  (Backend)  │
-└──────┬──────┘
-       │
-       │ Process frames
-       ↓
-┌─────────────┐
-│ VLM Models  │
-│ SmolVLM /   │
-│ Moondream   │
-└─────────────┘
-```
+The application is built with a modern, real-time architecture designed for efficient video processing and AI inference.
+
+#### Frontend (React)
+- **UI Framework**: React with TypeScript.
+- **Video Input**:
+    - **Live Camera**: Real-time capture using WebRTC.
+    - **Video Files**: Direct upload and playback of local video files.
+    - **Video URLs**: Supports direct video URLs for streaming.
+- **Communication**:
+    - **WebSocket**: For real-time configuration updates and receiving results from the backend.
+    - **HTTP**: Sends video frames to the backend for processing.
+- **State Management**: Managed within React components using hooks.
+- **Controls**: Allows users to switch between models, configure modes, and adjust processing settings.
+
+#### Backend (FastAPI)
+- **Framework**: FastAPI (Python) for high-performance API endpoints.
+- **Video Processing**: Receives frames from the frontend, preprocesses them, and passes them to the AI models.
+- **Communication**:
+    - **WebSocket**: Manages connections with the frontend for broadcasting results and configuration.
+    - **HTTP Endpoints**: Exposes endpoints for frame processing and health checks.
+- **AI Orchestration**: Manages the loading, switching, and execution of different AI models in a non-blocking way.
+
+#### AI Models (Vision Language Models)
+- **Qwen2-VL**: A powerful multilingual model for captioning and queries.
+- **SmolVLM**: A lightweight and fast model, ideal for real-time captioning.
+- **Moondream**: A feature-rich model supporting advanced capabilities like object detection and point tracking.
+- **Hardware Support**: Optimized for both Apple Silicon (M-series chips) and NVIDIA GPUs, with automatic device placement and precision selection.
+- **Inference Pipeline**: A real-time pipeline that captures frames, processes them through the selected model, and returns results with minimal latency.
 
 ## 🆘 Support & Issues
 

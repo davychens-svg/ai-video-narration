@@ -183,14 +183,7 @@ export function ModelSelector({
         {/* Qwen2-VL Query */}
         {selectedModel === 'qwen2vl' && (
           <div className="space-y-4">
-            {/* Multilingual Status */}
-            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-              <p className="text-xs text-blue-400 flex items-center gap-2">
-                <Check className="w-4 h-4" />
-                <span className="font-medium">{language === 'ja' ? '多言語対応モデル' : 'Multilingual Support Enabled'}</span>
-                <span className="opacity-70">{language === 'ja' ? '· 日本語ネイティブ対応 · 翻訳不要' : '· Native Japanese/Chinese · No Translation'}</span>
-              </p>
-            </div>
+
 
             {/* Prompt */}
             <div className="space-y-2">
@@ -234,14 +227,7 @@ export function ModelSelector({
         {/* SmolVLM Query */}
         {selectedModel === 'smolvlm' && (
           <div className="space-y-4">
-            {/* Real-time Status */}
-            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-              <p className="text-xs text-green-400 flex items-center gap-2">
-                <Check className="w-4 h-4" />
-                <span className="font-medium">{t.smolRealtimeTitle}</span>
-                <span className="opacity-70">{t.smolRealtimeSubtitle}</span>
-              </p>
-            </div>
+
 
             {/* Prompt */}
             <div className="space-y-2">

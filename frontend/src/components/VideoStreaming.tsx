@@ -57,7 +57,7 @@ export function VideoStreaming({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [youtubeUrl, setYoutubeUrl] = useState('');
-  const [activeTab, setActiveTab] = useState('camera');
+  const [activeTab, setActiveTab] = useState('youtube');
   const [error, setError] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
