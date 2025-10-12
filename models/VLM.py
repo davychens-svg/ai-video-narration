@@ -80,8 +80,19 @@ class VLMModel:
         self.model = None
         self.processor = None
 
+        # Safe CUDA cache clearing - catch errors from corrupted GPU state
         if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            except Exception as e:
+                logger.warning(f"CUDA cleanup failed (GPU may be in bad state): {e}")
+                # Try to reset CUDA context if possible
+                try:
+                    import subprocess
+                    subprocess.run(['nvidia-smi', '--gpu-reset'], capture_output=True, timeout=5)
+                except:
+                    pass
 
         self.is_ready = False
 
