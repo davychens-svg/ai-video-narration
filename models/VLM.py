@@ -778,7 +778,7 @@ class Qwen2VL(VLMModel):
         try:
             # Determine device and dtype
             if torch.cuda.is_available():
-                dtype = torch.bfloat16
+                dtype = torch.float32
                 device_map = "auto"
                 # Use flash_attention_2 for speed on Ampere+ GPUs
                 try:
@@ -1470,7 +1470,7 @@ class VLMProcessor:
     Supports: Qwen2-VL-2B (multilingual), SmolVLM-500M, Moondream 2 (feature-rich)
     """
 
-    def __init__(self, model_name: str = "qwen2vl", language: str = "ja"):
+    def __init__(self, model_name: str = "qwen2vl", language: str = "en"):
         self.current_model_name = model_name
         self.model: Optional[VLMModel] = None
         self.language = language  # User's preferred language
@@ -1616,7 +1616,7 @@ class VLMProcessor:
         # Qwen2VL supports caption + query modes with multilingual capability
         if isinstance(self.model, Qwen2VL):
             prompt = user_input if isinstance(user_input, str) and user_input.strip() else None
-            target_language = self.language or "ja"
+            target_language = "ja"
 
             if mode == "query":
                 if not prompt:
