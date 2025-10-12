@@ -1466,7 +1466,7 @@ class VLMProcessor:
     Supports: Qwen2-VL-2B (multilingual), SmolVLM-500M, Moondream 2 (feature-rich)
     """
 
-    def __init__(self, model_name: str = "qwen2vl", language: str = "en"):
+    def __init__(self, model_name: str = "qwen2vl", language: str = "ja"):
         self.current_model_name = model_name
         self.model: Optional[VLMModel] = None
         self.language = language  # User's preferred language
