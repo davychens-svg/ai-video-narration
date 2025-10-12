@@ -8,6 +8,7 @@ import base64
 import io
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from collections import deque
@@ -24,6 +25,10 @@ from PIL import Image
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaRelay
 from av import VideoFrame
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Import our VLM models
 import sys
@@ -31,7 +36,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 from models.VLM import VLMProcessor
 
 # Configure logging
-import os
 log_dir = Path(__file__).parent.parent / "logs"
 log_dir.mkdir(exist_ok=True)
 qwen_capture_dir = log_dir / "qwen_captures"
@@ -50,11 +54,8 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI
 app = FastAPI(title="Vision AI Demo")
 
-# Add CORS middleware
-allowed_origins_env = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,http://172.233.92.213,http://172.233.92.213:8001"
-)
+# Add CORS middleware - load from environment variable
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
 allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
 
 if not allowed_origins:
@@ -841,10 +842,14 @@ async def switch_model(params: dict):
 if __name__ == "__main__":
     import uvicorn
 
+    # Get host and port from environment variables
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8001"))
+
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8001,
+        host=host,
+        port=port,
         reload=False,  # Disable reload for performance
         log_level="info",
         access_log=True
