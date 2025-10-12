@@ -1285,8 +1285,7 @@ class Qwen2VL(VLMModel):
         }
         cfg = length_map.get(response_length, length_map["medium"])
 
-        detected_language = self._detect_language(prompt)
-        target_language = detected_language or language or "en"
+        target_language = language or "ja"
 
         attempts = [
             {
@@ -1413,8 +1412,7 @@ class Qwen2VL(VLMModel):
         }
         cfg = length_map.get(response_length, length_map["medium"])
 
-        detected_language = self._detect_language(question_text)
-        target_language = detected_language or language or "en"
+        target_language = language or "ja"
 
         attempts = [
             {
