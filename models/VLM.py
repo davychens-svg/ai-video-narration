@@ -774,7 +774,7 @@ class Qwen2VL(VLMModel):
         try:
             # Determine device and dtype
             if torch.cuda.is_available():
-                dtype = torch.float16
+                dtype = torch.float32
                 device_map = "auto"
                 # Use flash_attention_2 for speed on Ampere+ GPUs
                 try:
