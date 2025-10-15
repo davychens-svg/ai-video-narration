@@ -186,9 +186,9 @@ ENV
 
 **Important Configuration Options:**
 - `ALLOWED_ORIGINS`: Must include your server's IP/domain (comma-separated, no spaces)
-- `DEFAULT_MODEL`: Choose `smolvlm` (fast), `qwen2vl` (multilingual), or `moondream` (feature-rich)
+- `DEFAULT_MODEL`: Choose `qwen2vl` (multilingual) as default,  we have `smolvlm` (fast),or `moondream` (feature-rich) 
 - `MODEL_DEVICE`: Use `cuda` for GPU, `cpu` for CPU-only
-- `MODEL_DTYPE`: Use `float16` to save memory (requires GPU)
+- `MODEL_DTYPE`: Use `float32` to avoid cuda issues
 
 See `.env.example` for all available options and detailed comments.
 
