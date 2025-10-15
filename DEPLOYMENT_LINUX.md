@@ -365,7 +365,7 @@ Replace `YOUR_SERVER_IP` with your actual server IP.
 ### 7.5 Enable Site and Fix Permissions
 
 ```bash
-# Enable site
+# Enable site - this needs some test may fail
 ln -s /etc/nginx/sites-available/vision-ai /etc/nginx/sites-enabled/
 rm /etc/nginx/sites-enabled/default
 
@@ -384,7 +384,7 @@ systemctl restart nginx
 
 ### 8.1 Create Backend Service
 
-Create `/etc/systemd/system/vision-ai-backend.service`:
+Create `/etc/systemd/system/vision-ai-backend.service` use sudo nano:
 
 ```ini
 [Unit]
